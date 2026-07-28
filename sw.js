@@ -3,7 +3,7 @@
  * 데이터 API(Apps Script)는 절대 캐시하지 않습니다 — 항상 네트워크로 보냅니다.
  * 캐시를 새로 배포하려면 CACHE 버전 숫자를 올리세요.
  */
-var CACHE = 'tokyo-pwa-v18';
+var CACHE = 'tokyo-pwa-v19';
 
 /* 설치 때 미리 받아둘 앱 셸.
  * CDN 라이브러리(jsdelivr·unpkg)는 CORS 허용 응답이라 precache가 됩니다. */

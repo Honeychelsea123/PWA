@@ -1143,7 +1143,7 @@ var APP_VERSION = 'v7 · 즉시 저장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b18 · 지도 링크 이름+중심';
+var BUILD = 'b19 · 오프라인 캐시';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -1240,7 +1240,11 @@ window.onload = function(){
     b.insertAdjacentHTML('afterbegin', ico(ti[b.dataset.v],22,1.6));
   });
   document.querySelectorAll('[data-close]').forEach(function(b){ b.innerHTML=ico('close',20); });
-  bind(); getRate(); getWeather(); load();
+  bind(); getRate(); getWeather();
+  // 캐시가 있으면 먼저 그립니다. 서버 응답(3초 이상)을 기다리지 않고 화면이 바로 뜹니다.
+  var boot0 = readCache();
+  if(boot0){ try { apply(boot0.data); } catch(e){} }
+  load();                              // 서버 응답이 오면 조용히 교체됩니다
   setInterval(poll,8000);
   setInterval(function(){ renderNow(); },30000);
   document.addEventListener('visibilitychange',function(){ if(!document.hidden) poll(); });
@@ -1249,8 +1253,40 @@ window.onload = function(){
   initKeyboardFix();
 };
 
+/* ═══════════ 오프라인 캐시 ═══════════
+   마지막으로 받은 전체 상태를 기기에 저장해 둡니다.
+   - 앱을 열면 캐시를 먼저 그려서 즉시 화면이 뜨고(서버 응답은 3초 넘게 걸립니다)
+   - 통신이 안 되면 캐시로 계속 볼 수 있습니다. 여행지에서 이게 핵심입니다.
+   아이프레임 시절에는 iOS가 저장소를 지워서 못 쓰던 방법입니다(HANDOFF 3장). */
+var CACHE_KEY = 'tripai.state.v1';
+function saveCache(d){
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), data: d })); }
+  catch(e){ /* 용량 초과 등은 조용히 넘깁니다. 캐시는 있으면 좋은 것일 뿐입니다 */ }
+}
+function readCache(){
+  try {
+    var r = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+    return (r && r.data && r.data.trip) ? r : null;
+  } catch(e){ return null; }
+}
+function cacheAge(at){
+  var m = Math.round((Date.now() - at) / 60000);
+  if(m < 1) return '방금';
+  if(m < 60) return m + '분 전';
+  var h = Math.round(m/60);
+  return h < 24 ? h + '시간 전' : Math.round(h/24) + '일 전';
+}
+
 function load(){
-  return api('getAll').then(apply).catch(function(e){
+  return api('getAll').then(function(d){ syncOk=true; apply(d); }).catch(function(e){
+    var c = readCache();
+    if(c){                       // 통신이 안 되면 마지막 내용으로 계속 씁니다
+      syncOk=false;
+      try { apply(c.data); } catch(err){}
+      renderFacts();
+      toast('오프라인 — ' + cacheAge(c.at) + ' 내용입니다');
+      return;
+    }
     $('boot').innerHTML='<div class="empty"><div class="empty__t">불러오지 못했습니다</div><div class="empty__s">'+esc(e.message||e)+'</div></div>';
   });
 }
@@ -1294,6 +1330,7 @@ function apply(d){
   renderHero(); renderFacts(); renderNow(); renderBookings(); renderDays();
   buildChips(); renderTimeline(); renderCost(); renderPack(); renderLinks(); fillSelects(); setSubnav();
   if(VIEW==='plan') updatePins();
+  saveCache(S);          // 화면에 그린 상태를 그대로 캐시에 남깁니다
 }
 
 /* ═══════════ 키보드 대응 ═══════════ */
