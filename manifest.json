@@ -1,6 +1,6 @@
 {
-  "name": "Trip AI",
-  "short_name": "Trip AI",
+  "name": "Trip.AI",
+  "short_name": "Trip.AI",
   "description": "일정·지출·예약을 아는 AI 여행 비서",
   "start_url": ".",
   "scope": ".",
