@@ -1,0 +1,18 @@
+# 배포용 저장소입니다. 여기 있는 파일이 그대로 공개됩니다.
+# 실수로 섞이기 쉬운 것들만 막아둡니다.
+
+# 임시·시험 파일
+*_test.js
+*.tmp
+*.bak
+*~
+
+# OS·편집기
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 비밀값이 들어가기 쉬운 파일 (EXEC URL 외 토큰 등)
+.env
+.env.*
+secrets.json
