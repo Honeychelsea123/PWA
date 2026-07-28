@@ -413,7 +413,10 @@ svg { display: block; flex: none; }
 }
 .sheet {
   width: 100%; max-width: calc(var(--shell) - 24px);
-  max-height: min(88vh, calc(var(--vvh) - var(--kb) - 24px));
+  /* --vvh는 visualViewport 높이라 이미 키보드가 빠져 있습니다.
+     여기서 --kb를 또 빼면 값이 음수가 되어 시트가 찌그러집니다.
+     (아이프레임 시절엔 --vvh가 안 줄어서 이중 차감이 드러나지 않았습니다) */
+  max-height: min(88vh, calc(var(--vvh) - 24px));
   border-radius: var(--r-xl);
   display: flex; flex-direction: column; overflow: hidden;
   animation: rise .3s cubic-bezier(.22,.9,.28,1);
@@ -436,7 +439,11 @@ svg { display: block; flex: none; }
 }
 .f textarea { min-height: 100px; border-radius: var(--r-md); resize: vertical; line-height: 1.47; }
 .f input:focus, .f select:focus, .f textarea:focus { border-color: var(--primary-focus); outline: none; background: var(--canvas); }
-.f2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-sm); }
+/* minmax(0,1fr)이어야 합니다. 그냥 1fr이면 칸이 콘텐츠보다 작아지지 못해
+   "Day 1 · 9월 12일" 같은 긴 옵션이 옆 칸을 화면 밖으로 밀어냅니다. */
+.f2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: var(--s-sm); }
+.f2 > .f { min-width: 0; }
+.f select { text-overflow: ellipsis; }
 
 /* ── 가이드 ── */
 .chat { flex: 1; overflow-y: auto; padding: var(--s-md) var(--s-lg); display: flex; flex-direction: column; gap: var(--s-sm); }
@@ -545,9 +552,9 @@ button.link, button.link-quiet, a.link { padding: 9px 0; min-height: 40px; displ
    시트가 그대로 남아 위쪽이 화면 밖으로 밀립니다. */
 .sheet--tall { height: min(84vh, calc(var(--vvh) - 24px)); }
 body.kb .sheet {
-  max-height: min(52vh, calc(var(--vvh) - var(--kb) - 16px));
+  max-height: min(52vh, calc(var(--vvh) - 16px));
 }
-body.kb .sheet--tall { height: min(52vh, calc(var(--vvh) - var(--kb) - 16px)); }
+body.kb .sheet--tall { height: min(52vh, calc(var(--vvh) - 16px)); }
 body.kb .chat { min-height: 80px; }
 
 
