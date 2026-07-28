@@ -846,7 +846,9 @@ button.dt__row:active { transform: scale(0.98); }
   <!-- 홈 -->
   <section class="view is-on" id="v-home">
     <div class="hero">
-      <img id="heroImg" src="https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=1400&q=80" alt="">
+      <!-- 데이터가 오기 전에도 바로 보이도록 기본 주소를 둡니다.
+           실제 값은 설정 시트의 heroImage를 읽어 renderHero에서 다시 정합니다. -->
+      <img id="heroImg" src="https://plus.unsplash.com/premium_photo-1661914240950-b0124f20a5c1?auto=format&fit=crop&w=1400&q=80" alt="">
       <div class="hero__scrim"></div>
       <div class="hero__body">
         <div class="hero__eyebrow" id="heroTag"></div>
@@ -1141,7 +1143,7 @@ var APP_VERSION = 'v7 · 즉시 저장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b12 · 장소 링크 개선';
+var BUILD = 'b13 · 히어로 사진 설정화';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -1357,7 +1359,21 @@ function onScroll(){
 }
 
 /* ═══════════ 히어로 ═══════════ */
+/* 홈 히어로 사진. 설정 시트의 heroImage 값을 쓰고, 비어 있으면 이 주소를 씁니다.
+   코드를 고치지 않고 시트에서 사진을 바꿀 수 있습니다. */
+var HERO_FALLBACK = 'https://plus.unsplash.com/premium_photo-1661914240950-b0124f20a5c1?auto=format&fit=crop&w=1400&q=80';
+function setHeroImage(){
+  var img=$('heroImg'); if(!img) return;
+  var want = safeUrl(S.trip && S.trip.heroImage) || HERO_FALLBACK;
+  if(img.getAttribute('src') === want) return;        // 같은 주소면 다시 받지 않습니다
+  img.onerror = function(){                           // 시트에 잘못된 주소가 들어가도 화면이 비지 않게
+    img.onerror = null;
+    if(img.getAttribute('src') !== HERO_FALLBACK) img.src = HERO_FALLBACK;
+  };
+  img.src = want;
+}
 function renderHero(){
+  setHeroImage();
   var td=todayDay(), total=totalDays(), a=dayDate(1), b=dayDate(total), tag;
   if(td===0){ var n=a? Math.ceil((a-new Date())/86400000):0; tag = n>0? '출발까지 '+n+'일' : '오늘 출발'; }
   else if(td===-1) tag='여행 완료';
