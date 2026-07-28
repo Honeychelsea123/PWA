@@ -165,18 +165,20 @@ svg { display: block; flex: none; }
 /* ── 상단 유리 바 (히어로 사진 위를 떠다님) ── */
 .topbar {
   position: fixed; top: 10px; z-index: 1200;
-  left: 50%; transform: translateX(-50%);
-  width: min(calc(100% - 24px), calc(var(--shell) - 24px));
+  /* 화면이 좁으면 가장자리 12px, 넓으면 shell 오른쪽 끝에서 12px 안쪽.
+     width를 주지 않아 내용만큼만 차지하는 짧은 알약이 됩니다. */
+  right: max(12px, calc(50% - var(--shell) / 2 + 12px));
   height: var(--bar);
   border-radius: var(--r-pill);
   display: flex; align-items: center; gap: var(--s-xs);
-  padding: 0 10px 0 var(--s-lg);
+  padding: 0 8px;
 }
-.topbar__t { flex: 1; font-size: calc(21px * var(--ts)); font-weight: 600; letter-spacing: calc(0.231px * var(--ts)); }
 .gbtn {
   width: 40px; height: 40px; border-radius: var(--r-pill);
   display: grid; place-items: center; color: var(--ink);
 }
+/* 상단바 안에서는 애플 권장 최소 터치 크기(44px)를 지킵니다 */
+.topbar .gbtn { width: 44px; height: 44px; }
 .gbtn:active { background: rgba(0,0,0,.05); }
 
 /* ── 버튼 ── */
@@ -535,7 +537,6 @@ button.link, button.link-quiet, a.link { padding: 9px 0; min-height: 40px; displ
     inset 0 -1px 0 rgba(255,255,255,.12),
     0 10px 30px rgba(0,0,0,.22);
 }
-.topbar.on-dark .topbar__t,
 .topbar.on-dark .gbtn { color: #fff; }
 .topbar.on-dark .gbtn:active { background: rgba(255,255,255,.16); }
 .topbar.on-dark::after {
@@ -546,7 +547,7 @@ button.link, button.link-quiet, a.link { padding: 9px 0; min-height: 40px; displ
 }
 .topbar.on-dark::before { background: linear-gradient(to bottom, rgba(255,255,255,.16), rgba(255,255,255,0)); }
 .topbar { transition: background .25s, border-color .25s, box-shadow .25s; }
-.topbar__t, .gbtn { transition: color .25s; }
+.gbtn { transition: color .25s; }
 
 
 /* 목록에서 분류를 알아보게 하는 점 */
@@ -834,10 +835,9 @@ button.dt__row:active { transform: scale(0.98); }
 <div class="shell">
 
   <nav class="topbar glass">
-    <span class="topbar__t" id="sTitle">홈</span>
     <button class="gbtn" id="bAi" aria-label="여행 가이드"></button>
     <button class="gbtn" id="bSet" aria-label="설정"></button>
-    <button class="btn-primary sm" id="sCta">추가</button>
+    <button class="gbtn" id="sCta" aria-label="추가"></button>
   </nav>
 
   <!-- 홈 -->
@@ -1138,7 +1138,7 @@ var APP_VERSION = 'v7 · 즉시 저장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b7 · 시간칸 수정';
+var BUILD = 'b9 · 추가버튼 톤 통일';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -1224,6 +1224,9 @@ function paint(id, name, size){ var e=$(id); if(e) e.innerHTML=ico(name, size); 
 window.onload = function(){
   paint('bAi','spark',18);
   paint('bSet','gear',18);
+  /* 추가 버튼도 왼쪽 두 아이콘과 같은 유리 버튼입니다.
+     +는 획이 둘뿐이라 같은 18px에서는 가늘어 보여, 20px/1.8로 아주 조금만 키웠습니다. */
+  $('sCta').innerHTML = ico('plus', 20, 1.8);
   paint('aiLoc','pin',18);
   paint('aiCam','cam',18);
   paint('aiSend','send',20);
@@ -1919,8 +1922,10 @@ function updatePins(){
 }
 
 /* ═══════════ 화면 ═══════════ */
-var SUB={ home:['홈','추가'], plan:['일정','추가'], cost:['지출','입력'], link:['준비물','추가'] };
-function setSubnav(){ $('sTitle').textContent=SUB[VIEW][0]; $('sCta').textContent=SUB[VIEW][1]; }
+/* 상단바에는 글자가 없습니다. 추가 버튼이 무엇을 추가하는지는 aria-label로만 알립니다.
+   (어느 탭에서 무엇을 추가하는지의 실제 분기는 클릭 핸들러에 그대로 있습니다) */
+var ADD_LABEL={ home:'일정 추가', plan:'일정 추가', cost:'지출 입력', link:'준비물 추가' };
+function setSubnav(){ $('sCta').setAttribute('aria-label', ADD_LABEL[VIEW]||'추가'); }
 function go(v){
   VIEW=v;
   ['home','plan','cost','link'].forEach(function(k){ $('v-'+k).classList.toggle('is-on',k===v); });
