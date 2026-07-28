@@ -445,6 +445,17 @@ svg { display: block; flex: none; }
 .f2 > .f { min-width: 0; }
 .f select { text-overflow: ellipsis; }
 
+/* iOS의 네이티브 time/date 컨트롤은 자체 최소 너비를 갖고 있어서
+   width:100%만으로는 칸 밖으로 삐져나옵니다. min-width를 풀고
+   네이티브 외형을 꺼야 폭이 실제로 적용됩니다.
+   한국어 로케일에서는 "오전 12:00"으로 표시돼 더 넓으므로 좌우 여백도 줄입니다.
+   (font-size는 16px 이상을 유지해야 포커스 시 확대되지 않습니다) */
+.f input[type="time"], .f input[type="date"] {
+  min-width: 0; max-width: 100%;
+  padding-left: 12px; padding-right: 12px;
+  -webkit-appearance: none; appearance: none;
+}
+
 /* ── 가이드 ── */
 .chat { flex: 1; overflow-y: auto; padding: var(--s-md) var(--s-lg); display: flex; flex-direction: column; gap: var(--s-sm); }
 .bub { max-width: 86%; padding: var(--s-sm) 16px; font-size: calc(17px * var(--ts)); line-height: 1.47; letter-spacing: calc(-0.374px * var(--ts)); border-radius: var(--r-lg); }
