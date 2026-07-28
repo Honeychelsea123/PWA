@@ -1141,7 +1141,7 @@ var APP_VERSION = 'v7 · 즉시 저장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b11 · 추가/설정 위치 교체';
+var BUILD = 'b12 · 장소 링크 개선';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -2334,16 +2334,51 @@ function sendAi(text){
 }
 
 /** AI가 언급한 장소에 확인용 링크를 답니다. 요약된 숫자보다 원본이 정확합니다. */
+/* ── AI 답변에 붙는 장소 링크 ──
+   한국에서 "도쿄 긴자 우시구로"처럼 한글로 검색하면 구글이 현재 위치를 기준으로
+   엉뚱한 국내 가게를 내놓습니다. 그래서 좌표 > 현지어 이름 > 한글 순으로
+   덜 흔들리는 것을 먼저 씁니다. */
+function normName(s){
+  return String(s==null?'':s).toLowerCase().replace(/[\s·\-()（）\[\]]/g,'');
+}
+function okCoord(la, ln){
+  la = Number(la); ln = Number(ln);
+  return isFinite(la) && isFinite(ln) && !(la === 0 && ln === 0);
+}
+/* 일정에 저장된 좌표가 AI가 낸 것보다 정확합니다. 이름이 겹치면 그쪽을 씁니다.
+   (일정 제목은 "긴자 하치고 (銀座 八五)"처럼 병기된 경우가 있어 부분 일치도 봅니다) */
+function savedCoordFor(name){
+  var n = normName(name);
+  if(n.length < 2) return null;
+  var hit = null;
+  (S.plan||[]).forEach(function(p){
+    if(hit || !okCoord(p.lat, p.lng)) return;
+    var t = normName(p.title);
+    if(t.length < 2) return;
+    if(t === n || t.indexOf(n) !== -1 || n.indexOf(t) !== -1) hit = {lat:Number(p.lat), lng:Number(p.lng)};
+  });
+  return hit;
+}
+function placeMapUrl(p, dest){
+  var c = savedCoordFor(p.name) || (p.localName ? savedCoordFor(p.localName) : null);
+  if(!c && okCoord(p.lat, p.lng)) c = {lat:Number(p.lat), lng:Number(p.lng)};
+  var base = 'https://www.google.com/maps/search/?api=1&query=';
+  if(c) return base + c.lat + ',' + c.lng;                       // 1순위: 좌표
+  if(p.localName) return base + encodeURIComponent(p.localName); // 2순위: 현지어
+  return base + encodeURIComponent(dest + p.name);               // 최후: 목적지 + 한글
+}
+/* 구글 검색을 거치지 않고 타베로그 검색 결과로 바로 보냅니다.
+   현지어 이름이 있으면 그쪽이 훨씬 잘 맞습니다. */
+function tabelogUrl(p){
+  return 'https://tabelog.com/rstLst/?sw=' + encodeURIComponent(p.localName || p.name);
+}
 function drawPlaces(bubble, places){
   var dest = (S.trip && S.trip.destination) ? S.trip.destination + ' ' : '';
   var d=document.createElement('div'); d.className='places';
   d.innerHTML = places.map(function(p){
-    var q = encodeURIComponent(dest + p.name);
-    var tbl = 'https://www.google.com/search?q=' + encodeURIComponent(p.name + ' tabelog');
     return '<div class="place"><span class="place__n">'+esc(p.name)+'</span>'+
-      (p.food ? '<a class="place__a tbl" href="'+tbl+'" target="_blank" rel="noopener">타베로그</a>' : '')+
-      '<a class="place__a" href="https://www.google.com/maps/search/?api=1&query='+q+
-      '" target="_blank" rel="noopener">지도</a></div>';
+      (p.food ? '<a class="place__a tbl" href="'+esc(tabelogUrl(p))+'" target="_blank" rel="noopener">타베로그</a>' : '')+
+      '<a class="place__a" href="'+esc(placeMapUrl(p, dest))+'" target="_blank" rel="noopener">지도</a></div>';
   }).join('');
   bubble.appendChild(d); scrollChat();
 }
