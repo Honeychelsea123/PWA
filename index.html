@@ -76,7 +76,10 @@
   --kb:  0px;         /* 키보드 높이 */
   --sab: env(safe-area-inset-bottom, 0px);   /* PWA: 홈 인디케이터 높이. iframe 래퍼 없이 네이티브로 측정 */
   --shell: 480px;
-  --bar: 64px;
+  /* 상단 알약 높이. 44px 버튼 + 위아래 4px.
+     .shell의 padding-top과 .hero의 음수 마진이 이 값을 함께 쓰므로
+     여기만 바꾸면 셋이 일관되게 따라옵니다. */
+  --bar: 52px;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -1138,7 +1141,7 @@ var APP_VERSION = 'v7 · 즉시 저장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b9 · 추가버튼 톤 통일';
+var BUILD = 'b10 · 상단바 높이 축소';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
