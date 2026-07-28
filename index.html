@@ -1152,7 +1152,7 @@ var APP_VERSION = 'v7 · 즉시 저장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b20 · 좌표 채우기';
+var BUILD = 'b21 · 되돌리기';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -2288,6 +2288,7 @@ function bind(){
       }).join(''));
       scrollChat(); return;
     }
+    if((el=t.closest('[data-undo]'))) return undoAct(el.dataset.undo);
     if((el=t.closest('[data-do]'))) return doAct(el.dataset.do);
     if((el=t.closest('[data-fix]'))) return fixAct(el.dataset.fix);
     if((el=t.closest('[data-skip]'))) return skipAct(el.dataset.skip);
@@ -2593,10 +2594,49 @@ function actCard(k, a){
     '<div class="act__f">'+buttons+'</div></div>';
 }
 
+/* ═══════════ 되돌리기 ═══════════
+   AI가 적용한 것만 되돌립니다(HANDOFF 11장). 적용 직전 상태를 기억해 두었다가
+   반대 동작을 실행합니다.
+   - 추가/지출 → 새로 생긴 항목을 지웁니다 (적용 전후 id를 비교해 찾습니다)
+   - 수정/삭제 → 원래 값으로 되돌립니다.
+     서버 save_는 id를 못 찾으면 새로 추가하므로 삭제한 것도 같은 id로 복원됩니다. */
+var undos={};
+function ids(list){ var m={}; (list||[]).forEach(function(x){ m[String(x.id)]=1; }); return m; }
+function newIdIn(before, after){
+  var hit=null;
+  (after||[]).forEach(function(x){ if(!hit && !before[String(x.id)]) hit=String(x.id); });
+  return hit;
+}
+function undoAct(k){
+  var u=undos[k]; if(!u) return;
+  var card=document.querySelector('[data-card="'+k+'"]');
+  if(card) card.classList.add('is-busy');
+  u.run().then(function(d){
+    var c=S.chat; apply(d); S.chat=c;
+    delete undos[k];
+    if(card){
+      card.classList.remove('is-busy');
+      var done=card.querySelector('.act__done');
+      if(done) done.textContent='되돌렸습니다';
+      var btn=card.querySelector('[data-undo]');
+      if(btn) btn.remove();
+    }
+    toast('되돌렸습니다');
+  }).catch(function(e){
+    if(card) card.classList.remove('is-busy');
+    toast('되돌리지 못했습니다: '+(e.message||e));
+  });
+}
+
 function doAct(k){
   var a=pending[k]; if(!a) return;
   var card=document.querySelector('[data-card="'+k+'"]');
   if(card) card.classList.add('is-busy');
+
+  // 적용 전 상태를 기록해 둡니다
+  var beforePlan=ids(S.plan), beforeExp=ids(S.expense);
+  var prev=(a.type==='edit'||a.type==='delete') ? find(S.plan, a.id) : null;
+  if(prev) prev=JSON.parse(JSON.stringify(prev));
 
   var p;
   if(a.type==='expense'){
@@ -2615,11 +2655,27 @@ function doAct(k){
 
   return p.then(function(d){
     var keepChat=S.chat; apply(d); S.chat=keepChat;
+
+    // 반대 동작을 만들어 둡니다
+    if(a.type==='expense'){
+      var ne=newIdIn(beforeExp, S.expense);
+      if(ne) undos[k]={ run:function(){ return api('deleteExpense', ne); } };
+    } else if(a.type==='add' || !prev){
+      var np=newIdIn(beforePlan, S.plan);
+      if(np) undos[k]={ run:function(){ return api('deleteSchedule', np); } };
+    } else {
+      undos[k]={ run:function(){ return api('saveSchedule', { id:prev.id, day:prev.day,
+        time:prev.time, cat:prev.cat, title:prev.title, memo:prev.memo,
+        lat:prev.lat||'', lng:prev.lng||'' }); } };
+    }
+
     if(card){
       card.classList.remove('is-busy'); card.classList.add('is-done');
       card.insertAdjacentHTML('beforeend','<div class="act__done">' +
         (a.type==='delete'?'삭제했습니다':a.type==='edit'?'수정했습니다':
          a.type==='expense'?'지출에 넣었습니다':'일정에 넣었습니다') + '</div>');
+      if(undos[k]) card.insertAdjacentHTML('beforeend',
+        '<button class="link sm" data-undo="'+k+'" style="margin-top:6px">되돌리기</button>');
     }
     delete pending[k];
     toast(a.type==='delete'?'삭제했습니다':'반영했습니다');
