@@ -1,7 +1,7 @@
 {
-  "name": "도쿄 여행 플래너",
-  "short_name": "도쿄 여행",
-  "description": "AI 비서가 있는 개인 여행 플래너",
+  "name": "Trip AI",
+  "short_name": "Trip AI",
+  "description": "일정·지출·예약을 아는 AI 여행 비서",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
