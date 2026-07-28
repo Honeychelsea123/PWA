@@ -446,6 +446,45 @@ svg { display: block; flex: none; }
 .f input:focus, .f select:focus, .f textarea:focus { border-color: var(--primary-focus); outline: none; background: var(--canvas); }
 /* minmax(0,1fr)이어야 합니다. 그냥 1fr이면 칸이 콘텐츠보다 작아지지 못해
    "Day 1 · 9월 12일" 같은 긴 옵션이 옆 칸을 화면 밖으로 밀어냅니다. */
+/* ── 여행 중 오늘 화면 ── */
+.tday__day { font-size: calc(13px * var(--ts)); color: var(--ink-48); margin-bottom: 6px; }
+.tday__hd {
+  display: flex; align-items: baseline; gap: var(--s-xs);
+  font-size: calc(17px * var(--ts)); font-weight: 600; letter-spacing: calc(-0.35px * var(--ts));
+}
+.tday__hd span { flex: 1; min-width: 0; }
+.tday__hd time { font-size: calc(15px * var(--ts)); color: var(--primary); flex: none; }
+.tday__warn {
+  font-size: calc(13px * var(--ts)); line-height: 1.4; color: var(--k-food);
+  margin-top: 5px; font-weight: 600;
+}
+.tday__l { margin-top: var(--s-sm); border-top: 0.5px solid rgba(0,0,0,.07); padding-top: var(--s-sm); }
+.tday__i { display: flex; gap: var(--s-sm); padding: 7px 0; }
+.tday__t {
+  flex: none; width: 62px; font-size: calc(14px * var(--ts)); color: var(--ink-48);
+  font-variant-numeric: tabular-nums;
+}
+.tday__tag {
+  display: block; font-size: calc(10.5px * var(--ts)); font-weight: 700;
+  color: var(--primary); letter-spacing: 0;
+}
+.tday__b { min-width: 0; flex: 1; }
+.tday__n { font-size: calc(15px * var(--ts)); letter-spacing: calc(-0.3px * var(--ts)); }
+.tday__c {
+  display: flex; align-items: center; gap: 5px;
+  font-size: calc(12.5px * var(--ts)); color: var(--ink-48); margin-top: 2px;
+}
+/* 지난 일정은 흐리게, 지금·다음은 또렷하게 — 색만이 아니라 굵기로도 구분합니다 */
+.tday__i.is-done { opacity: .42; }
+.tday__i.is-cur .tday__n { font-weight: 700; }
+.tday__i.is-cur .tday__t, .tday__i.is-next .tday__t { color: var(--primary); }
+.tday__i.is-next .tday__n { font-weight: 600; }
+.tday__mv {
+  font-size: calc(12.5px * var(--ts)); color: var(--ink-48);
+  margin: 0 0 4px 74px; padding-left: 10px; border-left: 2px solid rgba(0,0,0,.10);
+}
+.tday__mv.is-tight { color: var(--k-food); border-left-color: var(--k-food); font-weight: 600; }
+
 /* 지출 빠른 입력 한 줄 */
 .qc { display: grid; grid-template-columns: minmax(0,1fr) 96px auto; gap: var(--s-xs); margin-top: var(--s-xs); }
 .qc input {
@@ -868,6 +907,7 @@ button.dt__row:active { transform: scale(0.98); }
       </div>
     </div>
     <div class="facts" id="facts"></div>
+    <div id="todaySlot"></div>
     <div id="nowSlot"></div>
     <div id="bookSlot"></div>
     <div id="dayStack"></div>
@@ -1168,7 +1208,7 @@ var APP_VERSION = 'v7 · 즉시 저장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b24 · 좌표 채우기 간격';
+var BUILD = 'b24 · 여행 중 모드';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -1276,7 +1316,7 @@ window.onload = function(){
   if(boot0){ try { apply(boot0.data); } catch(e){} }
   load();                              // 서버 응답이 오면 조용히 교체됩니다
   setInterval(poll,8000);
-  setInterval(function(){ renderNow(); },30000);
+  setInterval(function(){ renderToday(); renderNow(); },30000);   // 시각이 흐르면 '지금'이 바뀝니다
   document.addEventListener('visibilitychange',function(){ if(!document.hidden) poll(); });
   window.addEventListener('scroll', onScroll, {passive:true});
   onScroll();
@@ -1447,7 +1487,7 @@ function apply(d){
   $('aiUse').textContent = (S.aiCalls || 0) + '회 / 1,500회';
   $('verApp').textContent = '화면  ' + APP_VERSION + '   ' + BUILD;
   $('verSrv').textContent = '서버  ' + sv + (sv === APP_VERSION ? '' : '   ← 화면과 다릅니다');
-  renderHero(); renderFacts(); renderNow(); renderBookings(); renderDays();
+  renderHero(); renderFacts(); renderToday(); renderNow(); renderBookings(); renderDays();
   buildChips(); renderTimeline(); renderCost(); renderPack(); renderLinks(); fillSelects(); setSubnav();
   if(VIEW==='plan') updatePins();
   saveCache(S);          // 화면에 그린 상태를 그대로 캐시에 남깁니다
@@ -1550,9 +1590,110 @@ function renderFacts(){
 }
 
 /* ═══════════ 지금 ═══════════ */
+/* ═══════════ 여행 중 모드 ═══════════
+   계획할 때와 여행할 때는 필요한 게 다릅니다. 여행 중에는 Day 1~4 전체가 아니라
+   "지금 몇 시고, 다음이 뭐고, 거기까지 얼마나 걸리는지"만 보면 됩니다.
+   여행 기간(todayDay() > 0)에만 오늘 일정을 앞에 세우고, 그 외에는 기존 화면 그대로입니다. */
+
+/* 두 좌표 사이 거리(km) */
+function distKm(a, b){
+  if(!a || !b) return null;
+  var R=6371, dLa=(b[0]-a[0])*Math.PI/180, dLn=(b[1]-a[1])*Math.PI/180;
+  var la1=a[0]*Math.PI/180, la2=b[0]*Math.PI/180;
+  var x=Math.sin(dLa/2)*Math.sin(dLa/2) +
+        Math.sin(dLn/2)*Math.sin(dLn/2)*Math.cos(la1)*Math.cos(la2);
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
+}
+/* 도쿄 기준 이동 시간(분). HANDOFF 5장의 튜닝된 상수를 서버와 동일하게 씁니다.
+   여기서 값을 바꾸면 Code.gs의 travelMin_도 같이 바꿔야 검토 결과와 어긋나지 않습니다. */
+function travelMin(km){
+  if(km < 0.4) return 4;
+  if(km < 1.3) return Math.round(km*12) + 2;   // 도보
+  return Math.round(km*3.2) + 12;              // 전철 (환승·대기 포함)
+}
+/* 두 일정 사이 이동 안내. 좌표가 없으면 null (없는 걸 지어내지 않습니다) */
+function moveHint(from, to){
+  var a=coordOf(from), b=coordOf(to);
+  if(!a || !b) return null;
+  var km=distKm(a,b);
+  if(km===null) return null;
+  if(km < 0.15) return null;                   // 사실상 같은 자리
+  var m=travelMin(km);
+  return { km: km, min: m,
+           text: (km<1.3 ? '도보 ' : '이동 ') + m + '분 · ' +
+                 (km<1 ? Math.round(km*1000)+'m' : km.toFixed(1)+'km') };
+}
+function hhmm(m){
+  m=((m%1440)+1440)%1440;
+  return String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0');
+}
+
+function renderToday(){
+  var slot=$('todaySlot'); if(!slot) return;
+  var td=todayDay();
+  if(td<=0){ slot.innerHTML=''; return; }          // 여행 전·후에는 쓰지 않습니다
+
+  var today=S.plan.filter(function(p){ return +p.day===td; }).sort(byTime);
+  if(!today.length){ slot.innerHTML=''; return; }
+
+  var now=new Date(), nowM=now.getHours()*60+now.getMinutes();
+  var d=dayDate(td);
+
+  // 지금 진행 중인 것과 다음 것을 찾습니다
+  var curIdx=-1;
+  for(var i=0;i<today.length;i++){ if(toMin(today[i].time)<=nowM) curIdx=i; }
+  var nextIdx = curIdx+1 < today.length ? curIdx+1 : -1;
+
+  var rows=today.map(function(p, i){
+    var t=toMin(p.time), done = i<curIdx, isCur = i===curIdx, isNext = i===nextIdx;
+    var cls='tday__i' + (done?' is-done':'') + (isCur?' is-cur':'') + (isNext?' is-next':'');
+    var tag = isCur ? '지금' : isNext ? '다음' : '';
+    var h='<div class="'+cls+'">'+
+      '<div class="tday__t">'+esc(p.time||'–')+(tag?'<span class="tday__tag">'+tag+'</span>':'')+'</div>'+
+      '<div class="tday__b">'+
+        '<div class="tday__n">'+esc(nice(p.title))+'</div>'+
+        (p.cat?'<div class="tday__c"><i class="cdot" style="background:'+kc(p.cat)+'"></i>'+esc(p.cat)+'</div>':'')+
+      '</div></div>';
+
+    // 다음 일정까지의 이동 안내 (지금·다음 구간에서만 — 그 외엔 소음입니다)
+    var nx=today[i+1];
+    if(nx && (isCur || isNext)){
+      var mv=moveHint(p, nx);
+      var gap=toMin(nx.time)-t;
+      if(mv){
+        var tight = isFinite(gap) && gap<9999 && gap < mv.min;
+        h+='<div class="tday__mv'+(tight?' is-tight':'')+'">'+esc(mv.text)+
+           (tight?' · 간격 '+gap+'분, 빠듯합니다':'')+'</div>';
+      }
+    }
+    return h;
+  }).join('');
+
+  // 상단 요약: 다음 일정까지 남은 시간
+  var head='';
+  if(nextIdx>=0){
+    var nx2=today[nextIdx], diff=toMin(nx2.time)-nowM;
+    var when = diff<=0 ? '곧' : diff<60 ? diff+'분 후' : Math.floor(diff/60)+'시간 '+(diff%60)+'분 후';
+    var mv2 = curIdx>=0 ? moveHint(today[curIdx], nx2) : null;
+    head='<div class="tday__hd"><span>다음 '+esc(nice(nx2.title))+'</span><time>'+esc(when)+'</time></div>';
+    if(mv2 && diff>0 && diff < mv2.min)
+      head+='<div class="tday__warn">이동에 '+mv2.min+'분 필요 — 지금 나서야 합니다</div>';
+  } else {
+    head='<div class="tday__hd"><span>오늘 일정을 모두 마쳤습니다</span></div>';
+  }
+
+  slot.innerHTML='<div class="stack"><div class="card glass">'+
+    '<div class="tday__day">Day '+td+(d?' · '+esc(fmtD(d)):'')+'  ·  지금 '+hhmm(nowM)+'</div>'+
+    head+'<div class="tday__l">'+rows+'</div>'+
+    '<button class="link" data-goday="'+td+'">일정에서 열기</button>'+
+    '</div></div>';
+}
+
 function renderNow(){
   var slot=$('nowSlot'), td=todayDay(), list=S.plan.slice().sort(byTime);
   if(!list.length){ slot.innerHTML=''; return; }
+  // 여행 중에는 오늘 화면이 같은 내용을 더 자세히 보여줍니다. 두 번 띄우지 않습니다.
+  if(td>0 && list.filter(function(p){ return +p.day===td; }).length){ slot.innerHTML=''; return; }
   var now=new Date(), nowM=now.getHours()*60+now.getMinutes(), cur=null, nxt=null;
 
   if(td>0){
