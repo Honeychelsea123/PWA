@@ -446,6 +446,17 @@ svg { display: block; flex: none; }
 .f input:focus, .f select:focus, .f textarea:focus { border-color: var(--primary-focus); outline: none; background: var(--canvas); }
 /* minmax(0,1fr)이어야 합니다. 그냥 1fr이면 칸이 콘텐츠보다 작아지지 못해
    "Day 1 · 9월 12일" 같은 긴 옵션이 옆 칸을 화면 밖으로 밀어냅니다. */
+/* 지출 빠른 입력 한 줄 */
+.qc { display: grid; grid-template-columns: minmax(0,1fr) 96px auto; gap: var(--s-xs); margin-top: var(--s-xs); }
+.qc input {
+  width: 100%; min-width: 0; min-height: 44px; padding: 10px 14px;
+  background: rgba(255,255,255,.62); color: var(--ink);
+  border: 0.5px solid rgba(0,0,0,.10); border-radius: var(--r-md);
+  font-size: max(16px, calc(17px * var(--ts)));   /* 16px 미만이면 iOS가 확대합니다 */
+}
+.qc input:focus { border-color: var(--primary-focus); outline: none; background: var(--canvas); }
+.qc .btn-primary { min-height: 44px; padding: 0 16px; }
+
 .f2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: var(--s-sm); }
 .f2 > .f { min-width: 0; }
 .f select { text-overflow: ellipsis; }
@@ -880,6 +891,16 @@ button.dt__row:active { transform: scale(0.98); }
       <div class="bar" id="costBar"></div>
       <div class="legend" id="costLegend"></div>
     </div></div>
+    <!-- 빠른 입력: 여행 중 가장 자주 하는 동작이라 두 칸으로 끝냅니다.
+         Day는 오늘, 통화 JPY, 결제수단 현금이 기본. 나머지는 나중에 고치면 됩니다. -->
+    <div class="stack"><div class="card glass">
+      <div class="ty-caption-st muted-80" id="qcDay">빠른 입력</div>
+      <div class="qc">
+        <input type="text" id="qcTitle" placeholder="어디에 썼나요" autocomplete="off">
+        <input type="number" id="qcAmt" placeholder="금액" inputmode="numeric">
+        <button class="btn-primary sm" id="qcAdd">담기</button>
+      </div>
+    </div></div>
     <div id="settleSlot"></div>
     <div id="costRows"></div>
   </section>
@@ -1087,11 +1108,6 @@ button.dt__row:active { transform: scale(0.98); }
         </div>
       </div>
       <div class="f">
-        <label>검색 기능</label>
-        <div class="sample"><div class="sample__t" id="srchState">확인 중</div>
-        <div class="sample__s" id="srchNote">영업시간처럼 바뀌는 정보를 물을 때만 켜집니다. 한도를 넘으면 자동으로 잠시 꺼집니다.</div></div>
-      </div>
-      <div class="f">
         <label>오늘 AI 사용량</label>
         <div class="sample"><div class="sample__t" id="aiUse">—</div>
         <div class="sample__s">무료 한도는 하루 1,500회이고 한국시간 오후 5시에 초기화됩니다.</div></div>
@@ -1152,7 +1168,7 @@ var APP_VERSION = 'v7 · 즉시 저장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b21 · 되돌리기';
+var BUILD = 'b23 · 지출 빠른 입력';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -1172,7 +1188,12 @@ function api(fn){
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ fn: fn, args: args, token: API_TOKEN })
-  }).then(function(r){ return r.json(); }).then(function(res){
+  }).then(function(r){ return r.json(); }, function(){
+    // 두 번째 인자로 둬야 '통신 실패'만 여기로 옵니다.
+    // 서버가 거부한 경우(아래 throw)는 이 자리에 걸리지 않습니다.
+    // 이 구분이 없으면 서버가 거절한 요청까지 큐에 쌓여 영원히 재시도합니다.
+    var e = new Error('연결할 수 없습니다'); e.net = true; throw e;
+  }).then(function(res){
     if(res && res.ok) return res.data;
     throw new Error((res && res.error) || '서버 오류');
   });
@@ -1278,6 +1299,48 @@ function readCache(){
     return (r && r.data && r.data.trip) ? r : null;
   } catch(e){ return null; }
 }
+/* ── 오프라인 쓰기 큐 ──
+   통신이 안 될 때의 저장을 쌓아뒀다가 연결되면 순서대로 올립니다.
+   지하철이나 로밍이 끊긴 곳에서 지출을 넣는 상황이 실제로 자주 생깁니다.
+   서버가 '거부'한 것은 큐에 넣지 않습니다. 넣으면 영원히 재시도하게 됩니다. */
+var QUEUE_KEY = 'tripai.queue.v1', flushing = false;
+function readQueue(){
+  try { var q = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); return q instanceof Array ? q : []; }
+  catch(e){ return []; }
+}
+function writeQueue(q){
+  try { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); } catch(e){}
+}
+function enqueue(fn, rec){
+  var q = readQueue();
+  // 같은 항목을 여러 번 고치면 마지막 것만 남깁니다
+  if(rec && rec.id) q = q.filter(function(it){ return !(it.fn === fn && it.rec && it.rec.id === rec.id); });
+  q.push({ fn: fn, rec: rec, at: Date.now() });
+  writeQueue(q);
+  renderFacts();
+}
+function flushQueue(){
+  if(flushing) return;
+  var q = readQueue();
+  if(!q.length) return;
+  flushing = true;
+  (function next(){
+    var q2 = readQueue();
+    if(!q2.length){ flushing = false; renderFacts(); return load(); }
+    var it = q2[0];
+    api(it.fn, it.rec).then(function(){
+      writeQueue(readQueue().slice(1));
+      next();
+    }).catch(function(e){
+      if(e && e.net){ flushing = false; return; }   // 아직 오프라인이면 그대로 둡니다
+      // 서버가 거부한 것은 버립니다. 남겨두면 뒤의 것들이 영영 못 올라갑니다.
+      writeQueue(readQueue().slice(1));
+      toast('저장하지 못한 항목 1개를 건너뜁니다');
+      next();
+    });
+  })();
+}
+
 function cacheAge(at){
   var m = Math.round((Date.now() - at) / 60000);
   if(m < 1) return '방금';
@@ -1353,8 +1416,11 @@ function fillCoords(){
 
 function poll(){
   if(document.hidden) return;
-  api('getRevision').then(function(r){ syncOk=true; renderFacts(); if(r!==S.revision) load(); })
-    .catch(function(){ syncOk=false; renderFacts(); });
+  api('getRevision').then(function(r){
+    syncOk=true; renderFacts();
+    if(readQueue().length) return flushQueue();   // 연결이 돌아왔으면 밀린 저장부터
+    if(r!==S.revision) load();
+  }).catch(function(){ syncOk=false; renderFacts(); });
 }
 /** 글자 배율을 화면에 반영합니다 (0.8~1.5 범위만 허용) */
 function applyScale(v){
@@ -1377,14 +1443,6 @@ function apply(d){
   if(keepChat) S.chat = keepChat; $('boot').hidden=true;
   applyScale(S.trip.textScale);
   var sv = S.version || '(구버전 — Code.gs를 새로 배포하세요)';
-  var sm = S.searchMode || 'off';
-  $('srchState').textContent = sm==='off' ? '꺼짐'
-    : (S.searchReady ? (sm==='cse' ? '켜짐 (직접 검색)' : '켜짐 (Gemini)') : '설정 필요');
-  $('srchNote').textContent = sm==='off'
-    ? 'Code.gs의 CONFIG.SEARCH_MODE를 cse로 바꾸면 켜집니다.'
-    : (S.searchReady
-        ? '영업시간·별점처럼 바뀌는 정보를 물을 때만 검색합니다. 답변 아래 출처가 붙습니다.'
-        : '스크립트 속성에 CSE_KEY와 CSE_CX를 넣어야 검색이 됩니다. 없으면 검색 없이 답합니다.');
   $('aiUse').textContent = (S.aiCalls || 0) + '회 / 1,500회';
   $('verApp').textContent = '화면  ' + APP_VERSION + '   ' + BUILD;
   $('verSrv').textContent = '서버  ' + sv + (sv === APP_VERSION ? '' : '   ← 화면과 다릅니다');
@@ -1484,7 +1542,9 @@ function renderFacts(){
   var f=[];
   f.push('<span>100엔 <b>'+(rate*100).toFixed(1)+'원</b></span>');
   if(window._w) f.push('<span>도쿄 <b>'+esc(window._w)+'</b></span>');
-  f.push('<span style="display:inline-flex;align-items:center;gap:6px"><i class="dot'+(syncOk?'':' is-off')+'"></i>'+(syncOk?'동기화됨':'연결 끊김')+'</span>');
+  var wait = readQueue().length;
+  var sync = wait ? '저장 대기 '+wait : (syncOk ? '동기화됨' : '연결 끊김');
+  f.push('<span style="display:inline-flex;align-items:center;gap:6px"><i class="dot'+((syncOk&&!wait)?'':' is-off')+'"></i>'+sync+'</span>');
   $('facts').innerHTML=f.join('<i></i>');
 }
 
@@ -1788,7 +1848,30 @@ function money(e){
   return (e.cur==='KRW') ? '₩ '+Math.round(v).toLocaleString('ko-KR') : '¥ '+Math.round(v).toLocaleString('ko-KR');
 }
 
+/* 빠른 입력 — 금액과 이름만 받고 나머지는 기본값으로 채웁니다.
+   여행 중에는 결제 직후에 넣게 되므로, 손이 적게 가는 게 정확도보다 중요합니다. */
+function qcTargetDay(){
+  var d=todayDay();                       // 여행 중이면 오늘, 아니면 Day 1
+  return String(d>0 ? d : 1);
+}
+function renderQuickCost(){
+  var el=$('qcDay'); if(!el) return;
+  var d=qcTargetDay(), dt=dayDate(+d);
+  el.textContent = '빠른 입력  ·  Day ' + d + (dt ? ' (' + fmtDs(dt) + ')' : '') + ' · 엔화 · 현금';
+}
+function quickCost(){
+  var t=$('qcTitle').value.trim(), a=+$('qcAmt').value;
+  if(!t || !a) return toast('항목과 금액을 입력해 주세요');
+  var rec={ id:'', day:qcTargetDay(), title:t, amount:a, cur:'JPY', method:'현금', payer:'' };
+  $('qcTitle').value=''; $('qcAmt').value='';
+  $('qcTitle').blur(); $('qcAmt').blur();
+  optimistic('expense', rec, renderAllCost);
+  saveInBackground('saveExpense', rec);
+  toast(t + ' ' + yen(a) + ' 담았습니다');
+}
+
 function renderCost(){
+  renderQuickCost();
   var list=S.expense.slice().sort(function(a,b){ return a.day-b.day; });
   var yenSum=0, wonSum=0;
   list.forEach(function(e){ if(e.cur==='KRW') wonSum+=(+e.amount||0); else yenSum+=(+e.amount||0); });
@@ -2164,9 +2247,16 @@ function renderAllPack(){ renderPack(); }
 function saveInBackground(fn, rec){
   api(fn, rec).then(function(d){
     apply(d);
+    flushQueue();                        // 연결이 살아 있으니 밀린 것도 함께 올립니다
   }).catch(function(e){
-    toast('저장 실패: '+(e.message||e));
-    load();                              // 화면을 서버 상태로 되돌립니다
+    if(e && e.net){                      // 통신 문제 — 입력을 버리지 않고 쌓아둡니다
+      enqueue(fn, rec);
+      saveCache(S);                      // 화면에 반영된 상태를 캐시에도 남겨 새로고침해도 유지
+      syncOk=false; renderFacts();
+      return toast('오프라인 — 연결되면 저장합니다');
+    }
+    toast('저장 실패: '+(e.message||e));  // 서버가 거부한 것은 되돌립니다
+    load();
   });
 }
 function openCost(c){
@@ -2260,6 +2350,7 @@ function bind(){
     if(t.closest('#bAi')) return openChat();
     if(t.closest('#bSet')){ open_('sSet'); return renderGeoNote(); }
     if(t.closest('#bGeo')) return fillCoords();
+    if(t.closest('#qcAdd')) return quickCost();
     if(t.closest('#setDone')) return close_('sSet');
     if(t.closest('#bReload')){ load(); close_('sSet'); return toast('다시 불러왔습니다'); }
     if((el=t.closest('[data-ts]'))) return setScale(el.dataset.ts);
@@ -2302,6 +2393,9 @@ function bind(){
     }
   });
   $('aiIn').addEventListener('keypress',function(e){ if(e.key==='Enter') sendAi(); });
+  ['qcTitle','qcAmt'].forEach(function(id){
+    $(id).addEventListener('keypress',function(e){ if(e.key==='Enter') quickCost(); });
+  });
   $('aiFile').addEventListener('change',function(e){ pickShot(e.target.files[0]); e.target.value=''; });
   document.addEventListener('keydown',function(e){
     if(e.key==='Escape') document.querySelectorAll('.scrim').forEach(function(s){ if(!s.hidden) close_(s.id); });
