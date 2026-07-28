@@ -485,17 +485,6 @@ svg { display: block; flex: none; }
 }
 .tday__mv.is-tight { color: var(--k-food); border-left-color: var(--k-food); font-weight: 600; }
 
-/* 지출 빠른 입력 한 줄 */
-.qc { display: grid; grid-template-columns: minmax(0,1fr) 96px auto; gap: var(--s-xs); margin-top: var(--s-xs); }
-.qc input {
-  width: 100%; min-width: 0; min-height: 44px; padding: 10px 14px;
-  background: rgba(255,255,255,.62); color: var(--ink);
-  border: 0.5px solid rgba(0,0,0,.10); border-radius: var(--r-md);
-  font-size: max(16px, calc(17px * var(--ts)));   /* 16px 미만이면 iOS가 확대합니다 */
-}
-.qc input:focus { border-color: var(--primary-focus); outline: none; background: var(--canvas); }
-.qc .btn-primary { min-height: 44px; padding: 0 16px; }
-
 .f2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: var(--s-sm); }
 .f2 > .f { min-width: 0; }
 .f select { text-overflow: ellipsis; }
@@ -931,16 +920,6 @@ button.dt__row:active { transform: scale(0.98); }
       <div class="bar" id="costBar"></div>
       <div class="legend" id="costLegend"></div>
     </div></div>
-    <!-- 빠른 입력: 여행 중 가장 자주 하는 동작이라 두 칸으로 끝냅니다.
-         Day는 오늘, 통화 JPY, 결제수단 현금이 기본. 나머지는 나중에 고치면 됩니다. -->
-    <div class="stack"><div class="card glass">
-      <div class="ty-caption-st muted-80" id="qcDay">빠른 입력</div>
-      <div class="qc">
-        <input type="text" id="qcTitle" placeholder="어디에 썼나요" autocomplete="off">
-        <input type="number" id="qcAmt" placeholder="금액" inputmode="numeric">
-        <button class="btn-primary sm" id="qcAdd">담기</button>
-      </div>
-    </div></div>
     <div id="settleSlot"></div>
     <div id="costRows"></div>
   </section>
@@ -1208,7 +1187,7 @@ var APP_VERSION = 'v7 · 즉시 저장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b24 · 여행 중 모드';
+var BUILD = 'b25 · 빠른 입력 제거';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -1990,30 +1969,7 @@ function money(e){
   return (e.cur==='KRW') ? '₩ '+Math.round(v).toLocaleString('ko-KR') : '¥ '+Math.round(v).toLocaleString('ko-KR');
 }
 
-/* 빠른 입력 — 금액과 이름만 받고 나머지는 기본값으로 채웁니다.
-   여행 중에는 결제 직후에 넣게 되므로, 손이 적게 가는 게 정확도보다 중요합니다. */
-function qcTargetDay(){
-  var d=todayDay();                       // 여행 중이면 오늘, 아니면 Day 1
-  return String(d>0 ? d : 1);
-}
-function renderQuickCost(){
-  var el=$('qcDay'); if(!el) return;
-  var d=qcTargetDay(), dt=dayDate(+d);
-  el.textContent = '빠른 입력  ·  Day ' + d + (dt ? ' (' + fmtDs(dt) + ')' : '') + ' · 엔화 · 현금';
-}
-function quickCost(){
-  var t=$('qcTitle').value.trim(), a=+$('qcAmt').value;
-  if(!t || !a) return toast('항목과 금액을 입력해 주세요');
-  var rec={ id:'', day:qcTargetDay(), title:t, amount:a, cur:'JPY', method:'현금', payer:'' };
-  $('qcTitle').value=''; $('qcAmt').value='';
-  $('qcTitle').blur(); $('qcAmt').blur();
-  optimistic('expense', rec, renderAllCost);
-  saveInBackground('saveExpense', rec);
-  toast(t + ' ' + yen(a) + ' 담았습니다');
-}
-
 function renderCost(){
-  renderQuickCost();
   var list=S.expense.slice().sort(function(a,b){ return a.day-b.day; });
   var yenSum=0, wonSum=0;
   list.forEach(function(e){ if(e.cur==='KRW') wonSum+=(+e.amount||0); else yenSum+=(+e.amount||0); });
@@ -2492,7 +2448,6 @@ function bind(){
     if(t.closest('#bAi')) return openChat();
     if(t.closest('#bSet')){ open_('sSet'); return renderGeoNote(); }
     if(t.closest('#bGeo')) return fillCoords();
-    if(t.closest('#qcAdd')) return quickCost();
     if(t.closest('#setDone')) return close_('sSet');
     if(t.closest('#bReload')){ load(); close_('sSet'); return toast('다시 불러왔습니다'); }
     if((el=t.closest('[data-ts]'))) return setScale(el.dataset.ts);
@@ -2535,9 +2490,6 @@ function bind(){
     }
   });
   $('aiIn').addEventListener('keypress',function(e){ if(e.key==='Enter') sendAi(); });
-  ['qcTitle','qcAmt'].forEach(function(id){
-    $(id).addEventListener('keypress',function(e){ if(e.key==='Enter') quickCost(); });
-  });
   $('aiFile').addEventListener('change',function(e){ pickShot(e.target.files[0]); e.target.value=''; });
   document.addEventListener('keydown',function(e){
     if(e.key==='Escape') document.querySelectorAll('.scrim').forEach(function(s){ if(!s.hidden) close_(s.id); });
