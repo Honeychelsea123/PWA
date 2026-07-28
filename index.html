@@ -1078,6 +1078,15 @@ button.dt__row:active { transform: scale(0.98); }
         <button class="btn-primary" style="width:100%" id="bReload">지금 시트에서 다시 불러오기</button>
       </div>
       <div class="f">
+        <label>일정 좌표 채우기</label>
+        <div class="sample"><div class="sample__s" id="geoNote">확인 중</div></div>
+        <button class="btn-primary" style="width:100%;margin-top:8px" id="bGeo">좌표 없는 일정 찾아 채우기</button>
+        <div class="sample__s" style="margin-top:6px">
+          좌표가 있어야 지도 핀과 이동 시간 계산이 정확해집니다.
+          한 곳당 AI를 1회 부르므로 시간이 걸립니다. 중간에 멈춰도 채운 곳은 남습니다.
+        </div>
+      </div>
+      <div class="f">
         <label>검색 기능</label>
         <div class="sample"><div class="sample__t" id="srchState">확인 중</div>
         <div class="sample__s" id="srchNote">영업시간처럼 바뀌는 정보를 물을 때만 켜집니다. 한도를 넘으면 자동으로 잠시 꺼집니다.</div></div>
@@ -1143,7 +1152,7 @@ var APP_VERSION = 'v7 · 즉시 저장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b19 · 오프라인 캐시';
+var BUILD = 'b20 · 좌표 채우기';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -1290,6 +1299,58 @@ function load(){
     $('boot').innerHTML='<div class="empty"><div class="empty__t">불러오지 못했습니다</div><div class="empty__s">'+esc(e.message||e)+'</div></div>';
   });
 }
+/* ═══════════ 일정 좌표 채우기 ═══════════
+   좌표가 있어야 지도 핀과 이동 시간 계산(일정 검토)이 제대로 동작합니다.
+   좌표가 없으면 36곳짜리 지역명 사전으로 대체되어, 긴자 안의 두 장소가
+   거리 0으로 계산되는 식으로 검토가 무뎌집니다.
+   한 곳당 lookupPlace가 AI를 1회 부르므로 없는 것만 골라 순서대로 처리하고,
+   한도(429)에 걸리면 더 두드리지 않고 즉시 멈춥니다(HANDOFF 5장). */
+var geoBusy=false, geoStop=false;
+
+function needCoord(){
+  return (S.plan||[]).filter(function(p){ return !okCoord(p.lat, p.lng); });
+}
+function renderGeoNote(){
+  var el=$('geoNote'); if(!el) return;
+  var total=(S.plan||[]).length, need=needCoord().length;
+  el.textContent = !total ? '일정이 없습니다'
+    : need===0 ? '전체 ' + total + '개 모두 좌표가 있습니다'
+    : total + '개 중 ' + need + '개에 좌표가 없습니다';
+}
+function fillCoords(){
+  if(geoBusy){ geoStop=true; return toast('마무리하는 중…'); }   // 실행 중이면 중단 요청
+  var list=needCoord();
+  if(!list.length) return toast('채울 것이 없습니다');
+
+  geoBusy=true; geoStop=false;
+  var btn=$('bGeo'), found=0, failed=0, limited=false;
+  btn.textContent='중단하기';
+
+  function finish(){
+    geoBusy=false;
+    btn.textContent='좌표 없는 일정 찾아 채우기';
+    renderGeoNote();
+    toast(found + '개 채웠습니다' + (failed?' · '+failed+'개 못 찾음':'') +
+          (limited?' · AI 한도 도달':'') + (geoStop&&!limited?' (중단)':''));
+  }
+
+  (function next(i){
+    if(geoStop || i>=list.length) return finish();
+    var p=list[i];
+    $('geoNote').textContent = '(' + (i+1) + '/' + list.length + ') ' + nice(p.title);
+    api('lookupPlace', p.title).then(function(r){
+      if(r && r.ok && okCoord(r.lat, r.lng)){
+        return api('saveSchedule', { id:p.id, day:p.day, time:p.time, cat:p.cat,
+          title:p.title, memo:p.memo, lat:r.lat, lng:r.lng })
+          .then(function(d){ found++; var c=S.chat; apply(d); S.chat=c; });
+      }
+      failed++;
+      if(r && !r.ok && String(r.message||'').indexOf('한도')!==-1){ limited=true; geoStop=true; }
+    }).catch(function(){ failed++; })
+      .then(function(){ next(i+1); });
+  })(0);
+}
+
 function poll(){
   if(document.hidden) return;
   api('getRevision').then(function(r){ syncOk=true; renderFacts(); if(r!==S.revision) load(); })
@@ -2197,7 +2258,8 @@ function bind(){
 
     if(t.closest('#sCta')){ return VIEW==='cost'?openCost(null):VIEW==='link'?openPack(null):openPlan(null); }
     if(t.closest('#bAi')) return openChat();
-    if(t.closest('#bSet')) return open_('sSet');
+    if(t.closest('#bSet')){ open_('sSet'); return renderGeoNote(); }
+    if(t.closest('#bGeo')) return fillCoords();
     if(t.closest('#setDone')) return close_('sSet');
     if(t.closest('#bReload')){ load(); close_('sSet'); return toast('다시 불러왔습니다'); }
     if((el=t.closest('[data-ts]'))) return setScale(el.dataset.ts);
