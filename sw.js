@@ -3,7 +3,7 @@
  * 데이터 API(Apps Script)는 절대 캐시하지 않습니다 — 항상 네트워크로 보냅니다.
  * 캐시를 새로 배포하려면 CACHE 버전 숫자를 올리세요.
  */
-var CACHE = 'tokyo-pwa-v4';
+var CACHE = 'tokyo-pwa-v5';
 
 /* 설치 때 미리 받아둘 앱 셸.
  * CDN 라이브러리(jsdelivr·unpkg)는 CORS 허용 응답이라 precache가 됩니다. */
@@ -25,7 +25,12 @@ self.addEventListener('install', function (e) {
       .then(function (c) {
         // 개별 실패가 설치 전체를 막지 않도록 하나씩 담습니다.
         return Promise.all(CORE.map(function (u) {
-          return c.add(u).catch(function () {});
+          // GitHub Pages는 Cache-Control: max-age=600을 보냅니다.
+          // 그냥 받으면 브라우저 HTTP 캐시의 옛 파일을 그대로 캐시에 담게 되므로,
+          // 우리 파일은 cache:'reload'로 HTTP 캐시를 건너뛰고 새로 받습니다.
+          var mine = u.indexOf('http') !== 0;
+          var what = mine ? new Request(u, { cache: 'reload' }) : u;
+          return c.add(what).catch(function () {});
         }));
       })
       .then(function () { return self.skipWaiting(); })
@@ -69,9 +74,17 @@ self.addEventListener('fetch', function (e) {
   }
 
   // 페이지 이동 요청: 네트워크 우선, 오프라인이면 캐시된 셸을 돌려줍니다.
+  // cache:'reload'로 HTTP 캐시를 건너뜁니다. 이게 없으면 max-age=600 때문에
+  // 새로 배포해도 최대 10분간 옛 화면이 뜹니다.
   if (req.mode === 'navigate') {
     e.respondWith(
-      fetch(req).catch(function () { return caches.match('index.html'); })
+      fetch(req.url, { cache: 'reload' }).then(function (res) {
+        if (res && res.status === 200) {
+          var copy = res.clone();
+          caches.open(CACHE).then(function (c) { c.put('index.html', copy); });
+        }
+        return res;
+      }).catch(function () { return caches.match('index.html'); })
     );
     return;
   }
