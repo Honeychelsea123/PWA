@@ -1143,7 +1143,7 @@ var APP_VERSION = 'v7 · 즉시 저장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b17 · 타베로그 링크 우회';
+var BUILD = 'b18 · 지도 링크 이름+중심';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -2378,10 +2378,13 @@ function savedCoordFor(name){
 function placeMapUrl(p, dest){
   var c = savedCoordFor(p.name) || (p.localName ? savedCoordFor(p.localName) : null);
   if(!c && okCoord(p.lat, p.lng)) c = {lat:Number(p.lat), lng:Number(p.lng)};
-  var base = 'https://www.google.com/maps/search/?api=1&query=';
-  if(c) return base + c.lat + ',' + c.lng;                       // 1순위: 좌표
-  if(p.localName) return base + encodeURIComponent(p.localName); // 2순위: 현지어
-  return base + encodeURIComponent(dest + p.name);               // 최후: 목적지 + 한글
+  // 검색어는 현지어 우선. 일본어면 그것만으로도 구글이 일본으로 잡습니다.
+  var q = p.localName || (dest + p.name);
+  // 좌표는 '검색어'가 아니라 '지도 중심'으로 씁니다.
+  // 좌표만 넘기면 이름 없는 맨 핀이 떠서 평점·영업시간을 볼 수 없습니다.
+  if(c) return 'https://www.google.com/maps/search/' + encodeURIComponent(q) +
+                '/@' + c.lat + ',' + c.lng + ',17z';
+  return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q);
 }
 /* 타베로그의 검색 페이지(/rstLst/)는 접근이 자주 차단됩니다("アクセスが集中").
    개별 가게 페이지는 정상으로 열리므로, 구글에서 tabelog.com 안으로만 검색해
