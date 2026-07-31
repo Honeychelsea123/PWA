@@ -762,9 +762,17 @@ button.dt__row:active { transform: scale(0.98); }
 .act__amt { font-size: calc(17px * var(--ts)); font-weight: 700; letter-spacing: calc(-0.35px * var(--ts)); }
 .act__tag.t-exp { background: rgba(182,87,36,.14); color: var(--k-food); }
 .act__tag.t-cand { background: rgba(52,120,86,.14); color: var(--k-see); }
-/* 후보 카드 — 분류·출처 줄 */
-.cnd__s { display: flex; align-items: center; gap: 6px; margin-top: 3px;
-  font-size: calc(13px * var(--ts)); color: var(--ink-48); }
+/* 후보 카드 — 링크와 같은 이유로 촘촘하게 봅니다.
+ * .card는 좁은 화면 미디어쿼리에서 padding이 다시 잡히므로 .card.cnd로 특정도를 올리고,
+ * 버튼은 기본 min-height 40px에 카드 높이가 묶이지 않게 낮춥니다. */
+.card.cnd { padding: 10px var(--s-md); border-radius: 18px; }
+.cnd .ucard__t { font-size: calc(15px * var(--ts)); letter-spacing: calc(-0.3px * var(--ts)); }
+.cnd .ucard__s { font-size: calc(13px * var(--ts)); margin-top: 1px; }
+.cnd .ucard__f { margin-top: 4px; gap: var(--s-md); }
+/* 버튼에 붙는 margin-top 12px가 줄 높이를 28 → 40으로 늘립니다 */
+.cnd .link.sm { min-height: 28px; padding: 4px 0; font-size: calc(14px * var(--ts)); margin: 0; }
+.cnd__s { display: flex; align-items: center; gap: 5px; margin-top: 2px;
+  font-size: calc(12px * var(--ts)); color: var(--ink-48); }
 
 
 /* ── 챗봇 입력줄 정리 ── */
@@ -953,7 +961,7 @@ body.lndrag .lnk, body.lndrag .lgroup { touch-action: none; }
   <!-- 왼쪽 알약: 일정 탭에서만 보입니다. 후보는 곁다리라 목록을 펼쳐두지 않고
        눌렀을 때 시트로 엽니다. 일정 탭의 본론은 일정입니다. -->
   <nav class="topbar topbar--l glass" id="tbCand" hidden>
-    <button class="tbtxt" id="bCand" aria-label="후보 목록">후보<span class="tbn" id="candN">0</span></button>
+    <button class="tbtxt" id="bCand" aria-label="후보 여행지 목록">후보 여행지<span class="tbn" id="candN">0</span></button>
   </nav>
 
   <nav class="topbar glass">
@@ -1049,16 +1057,16 @@ body.lndrag .lnk, body.lndrag .lgroup { touch-action: none; }
 <!-- 후보 목록 (sCand보다 앞에 둡니다. 뒤에 오는 편집 시트가 위로 겹치게) -->
 <div class="scrim" id="sCandList" hidden>
   <div class="sheet glass-deep" role="dialog" aria-modal="true">
-    <div class="sheet__h"><h2>후보</h2><button class="gbtn" data-close="sCandList" aria-label="닫기"></button></div>
+    <div class="sheet__h"><h2>후보 여행지</h2><button class="gbtn" data-close="sCandList" aria-label="닫기"></button></div>
     <div class="sheet__b"><div id="candList"></div></div>
-    <div class="sheet__f"><button class="btn-primary" id="ndAdd">후보 추가</button></div>
+    <div class="sheet__f"><button class="btn-primary" id="ndAdd">후보 여행지 추천</button></div>
   </div>
 </div>
 
 <!-- 후보 편집 -->
 <div class="scrim" id="sCand" hidden>
   <div class="sheet glass-deep" role="dialog" aria-modal="true">
-    <div class="sheet__h"><h2 id="candH">후보 추가</h2><button class="gbtn" data-close="sCand" aria-label="닫기"></button></div>
+    <div class="sheet__h"><h2 id="candH">후보 여행지 추가</h2><button class="gbtn" data-close="sCand" aria-label="닫기"></button></div>
     <div class="sheet__b">
       <input type="hidden" id="ndId">
       <div class="f">
@@ -1302,7 +1310,7 @@ var APP_VERSION = 'v7 · 즉시 저장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b38 · 후보를 상단 시트로';
+var BUILD = 'b39 · 후보 여행지·카드 축소';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -2420,7 +2428,7 @@ function openCandList(){ renderCandidates(); open_('sCandList'); }
 function openCand(c){
   busySave['cand']=false;
   c=c||{};
-  $('candH').textContent=c.id?'후보 수정':'후보 추가';
+  $("candH").textContent=c.id?"후보 여행지 수정":"후보 여행지 추가";
   $('ndId').value=c.id||'';
   $('ndTitle').value=c.title||''; $('ndCat').value=c.cat||'명소/관광';
   $('ndAddr').value=c.addr||''; $('ndSrc').value=c.src||''; $('ndMemo').value=c.memo||'';
@@ -2477,7 +2485,7 @@ function candToPlan(id){
   close_('sCandList');        // 일정 시트가 목록 시트 아래에 깔리지 않게 먼저 닫습니다
   openPlan({ title:c.title, cat:c.cat, memo:c.memo, lat:c.lat, lng:c.lng });
   pFromCand=id;                       // openPlan이 먼저 비우므로 그 뒤에 표시합니다
-  $('planH').textContent='후보를 일정으로';
+  $("planH").textContent="후보 여행지를 일정으로";
 }
 
 /* ═══════════ 링크 순서 바꾸기 ═══════════
@@ -2850,7 +2858,7 @@ function savePlan(){
     renderCandidates();
     api('saveSchedule', rec)
       .then(function(){ return api('deleteCandidate', fromCand); })
-      .then(function(d){ var c=S.chat; apply(d); S.chat=c; toast('일정에 넣고 후보에서 지웠습니다'); })
+      .then(function(d){ var c=S.chat; apply(d); S.chat=c; toast('일정에 넣고 후보 여행지에서 지웠습니다'); })
       .catch(function(e){ toast('저장 실패: '+(e.message||e)); load(); });
     return;
   }
@@ -3318,7 +3326,7 @@ function actCard(k, a){
         ' · 날짜는 나중에</span></div>'+
       (a.addr?'<div class="act__m"><span>'+esc(a.addr)+'</span></div>':'')+
       (a.why?'<div class="act__why">'+esc(a.why)+'</div>':'')+
-      '<div class="act__f"><button class="link sm" data-do="'+k+'">후보에 담기</button>'+
+      '<div class="act__f"><button class="link sm" data-do="'+k+'">후보 여행지에 담기</button>'+
         '<button class="link-quiet" style="margin-left:auto" data-skip="'+k+'">무시</button></div></div>';
   }
   var TAG={add:['t-add','추가'], edit:['t-edit','수정'], delete:['t-del','삭제']}[a.type];
@@ -3434,7 +3442,7 @@ function doAct(k){
       card.insertAdjacentHTML('beforeend','<div class="act__done">' +
         (a.type==='delete'?'삭제했습니다':a.type==='edit'?'수정했습니다':
          a.type==='expense'?'지출에 넣었습니다':
-         a.type==='candidate'?'후보에 담았습니다':'일정에 넣었습니다') + '</div>');
+         a.type==='candidate'?"후보 여행지에 담았습니다":'일정에 넣었습니다') + '</div>');
       if(undos[k]) card.insertAdjacentHTML('beforeend',
         '<button class="link sm" data-undo="'+k+'" style="margin-top:6px">되돌리기</button>');
     }
