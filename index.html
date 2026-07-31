@@ -843,8 +843,17 @@ button.dt__row:active { transform: scale(0.98); }
 .sechd__b[aria-expanded="false"] .sechd__c { transform: rotate(0deg); }
 .sec.is-folded > .secbody { display: none; }
 
-/* 링크 순서 바꾸기 — 꾹 눌러 끌기 */
-.lnk { transition: box-shadow .16s, transform .12s, opacity .16s; }
+/* 링크 순서 바꾸기 — 꾹 눌러 끌기
+ * iOS는 길게 누르면 텍스트 선택 메뉴(선택·복사·조회)를 먼저 띄우고 pointercancel을 보냅니다.
+ * 그게 끌기가 켜지는 순간 드래그를 죽이므로, 카드에서는 처음부터 꺼둬야 합니다.
+ * body에 클래스를 거는 방식은 420ms 뒤라서 늦습니다. */
+.lnk {
+  transition: box-shadow .16s, transform .12s, opacity .16s;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none; user-select: none;
+  touch-action: pan-y;                          /* 세로 스크롤은 살리고 가로 흔들림은 무시 */
+}
+.lnk a, .lnk button { -webkit-touch-callout: none; }
 .lnk.is-drag {
   opacity: .95; transform: scale(1.02);
   box-shadow: 0 12px 30px rgba(0,0,0,.22);
@@ -852,6 +861,14 @@ button.dt__row:active { transform: scale(0.98); }
 }
 .lnk.is-drag * { pointer-events: none; }        /* 끌던 중 링크가 열리지 않게 */
 body.lndrag { user-select: none; -webkit-user-select: none; }
+body.lndrag .lnk { touch-action: none; }
+/* 순서 버튼 — 제스처가 안 먹는 상황에서도 확실히 바꿀 수 있는 길 */
+.lord { margin-left: auto; display: flex; gap: 2px; }
+.lord button {
+  width: 34px; height: 34px; display: grid; place-items: center;
+  border: 0; background: none; color: var(--ink-48); border-radius: var(--r-sm);
+}
+.lord button:disabled { opacity: .25; }
 .lhint { margin: 10px 2px 0; font-size: calc(12px * var(--ts)); color: var(--ink-48); }
 
 .pbar { height: 5px; border-radius: var(--r-pill); background: rgba(0,0,0,.07); margin: 0 var(--s-lg) var(--s-xs); overflow: hidden; }
@@ -1181,6 +1198,8 @@ var I = {
   cam:    '<path d="M4 8h3l1.4-2h7.2L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.4"/>',
   send:   '<path d="M4 12 20 4l-7 8 7 8-16-8z"/>',
   plus:   '<path d="M12 5v14M5 12h14"/>',
+  up:     '<path d="M12 19V5M5 12l7-7 7 7"/>',
+  down:   '<path d="M12 5v14M19 12l-7 7-7-7"/>',
   check:  '<path d="M4 12.5l5 5L20 6.5"/>',
   gear:   '<circle cx="12" cy="12" r="3.2"/><path d="M19.4 14.5a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/>'
 };
@@ -1208,7 +1227,7 @@ var APP_VERSION = 'v7 · 즉시 저장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b27 · 쇼핑 구분·링크 순서';
+var BUILD = 'b28 · 링크 순서 ↑↓·끌기 수정';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -2172,14 +2191,19 @@ function renderLinks(){
   }
   var g={}; S.link.forEach(function(l){ (g[l.category||'기타']=g[l.category||'기타']||[]).push(l); });
   box.innerHTML=secWrap('link', head, Object.keys(g).map(function(k){
-    return '<div class="lgroup">'+esc(k)+'</div><div class="stack" data-lgrp="'+esc(k)+'">'+g[k].map(function(l){
+    return '<div class="lgroup">'+esc(k)+'</div><div class="stack" data-lgrp="'+esc(k)+'">'+g[k].map(function(l, i){
       var u=safeUrl(l.url);
       return '<div class="card glass lnk" data-lid="'+esc(l.id)+'"><div class="ucard__t">'+esc(l.title)+'</div>'+
         (l.memo?'<div class="ucard__s">'+esc(l.memo)+'</div>':'')+
         '<div class="ucard__f">'+(u?'<a class="link sm" href="'+esc(u)+'" target="_blank" rel="noopener">열기</a>':'')+
-        '<button class="link sm" data-elink="'+esc(l.id)+'">수정</button></div></div>';
+        '<button class="link sm" data-elink="'+esc(l.id)+'">수정</button>'+
+        (g[k].length>1 ? '<span class="lord">'+
+          '<button data-lmove="up" data-lid="'+esc(l.id)+'" aria-label="위로 옮기기"'+(i===0?' disabled':'')+'>'+ico('up',17)+'</button>'+
+          '<button data-lmove="down" data-lid="'+esc(l.id)+'" aria-label="아래로 옮기기"'+(i===g[k].length-1?' disabled':'')+'>'+ico('down',17)+'</button>'+
+        '</span>' : '')+
+        '</div></div>';
     }).join('')+'</div>';
-  }).join('') + (S.link.length>1 ? '<div class="lhint">카드를 길게 눌러 순서를 바꿀 수 있습니다</div>' : ''));
+  }).join('') + (S.link.length>1 ? '<div class="lhint">↑↓ 로 순서를 바꿉니다. 카드를 길게 눌러 끌어도 됩니다.</div>' : ''));
   initLinkDrag();
 }
 
@@ -2214,6 +2238,24 @@ function lnCommit(){
   });
   saveCache(S);
   saveInBackground('reorderLinks', ids);
+}
+
+/* ↑↓ 버튼 — 제스처가 안 먹는 상황에서도 확실히 순서를 바꿀 수 있는 길입니다.
+ * 끌기와 같은 저장 경로(reorderLinks)를 씁니다. */
+function moveLink(id, dir){
+  var l = find(S.link, id); if(!l) return;
+  var cat = l.category || '기타';
+  var idxs = [];                      // 같은 구분에 속한 것들의 S.link 위치
+  S.link.forEach(function(x, i){ if((x.category||'기타') === cat) idxs.push(i); });
+  var at = idxs.indexOf(S.link.indexOf(l));
+  var to = at + (dir === 'up' ? -1 : 1);
+  if(at < 0 || to < 0 || to >= idxs.length) return;
+
+  var a = idxs[at], b = idxs[to];
+  var tmp = S.link[a]; S.link[a] = S.link[b]; S.link[b] = tmp;
+  renderLinks();
+  saveCache(S);
+  saveInBackground('reorderLinks', S.link.map(function(x){ return x.id; }));
 }
 
 function lnEnd(commit){
@@ -2251,7 +2293,7 @@ function initLinkDrag(){
       document.body.classList.add('lndrag');
       try { card.setPointerCapture(st.pid); } catch(err){}
       if(navigator.vibrate) try { navigator.vibrate(12); } catch(err){}
-    }, 420);
+    }, 350);
     lnDrag=st;
   });
 
@@ -2259,8 +2301,9 @@ function initLinkDrag(){
     if(!lnDrag) return;
     if(!lnDrag.on){
       // 아직 켜지기 전에 움직였다 = 스크롤하려는 것입니다. 끌기를 포기합니다.
+      // 손가락은 가만히 있어도 몇 px씩 떨리므로 문턱을 너무 좁히면 아예 안 걸립니다.
       var dx=e.clientX-lnDrag.x, dy=e.clientY-lnDrag.y;
-      if(dx*dx+dy*dy>100) lnEnd(false);
+      if(dx*dx+dy*dy>196) lnEnd(false);
       return;
     }
     var grp=lnDrag.card.parentNode;        // 같은 구분(.stack) 안에서만 움직입니다
@@ -2593,6 +2636,7 @@ function bind(){
     if(t.closest('#bkSave')) return saveBookRow();
     if(t.closest('#bkDel')) return del('deleteBooking',$('bkId').value,'이 예약','sBook');
     if((el=t.closest('[data-copy]'))) return copyText(el.dataset.copy);
+    if((el=t.closest('[data-lmove]'))) return moveLink(el.dataset.lid, el.dataset.lmove);
     if((el=t.closest('[data-elink]'))) return openLink(find(S.link,el.dataset.elink));
     if((el=t.closest('[data-pk]'))) return togglePack(el.dataset.pk);
     if((el=t.closest('[data-pke]'))) return openPack(find(S.pack||[],el.dataset.pke));
