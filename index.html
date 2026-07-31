@@ -323,12 +323,12 @@ svg { display: block; flex: none; }
 .tlcard { border-radius: var(--r-lg); overflow: hidden; }
 .ev { border-top: 0.5px solid rgba(0,0,0,.07); }
 .ev:first-child { border-top: none; }
-.ev__row { display: flex; gap: var(--s-sm); padding: var(--s-md) var(--s-lg); align-items: baseline; }
+.ev__row { display: flex; gap: var(--s-sm); padding: 11px var(--s-lg); align-items: baseline; }
 .ev__t { width: calc(50px * var(--ts)); flex: none; font-size: calc(14px * var(--ts)); letter-spacing: calc(-0.224px * var(--ts)); color: var(--ink-48); }
 .ev.is-now .ev__t { color: var(--primary); font-weight: 600; }
 .ev__b { flex: 1; min-width: 0; }
-.ev__ttl { font-size: calc(17px * var(--ts)); font-weight: 600; line-height: 1.24; letter-spacing: calc(-0.374px * var(--ts)); }
-.ev__sub { font-size: calc(14px * var(--ts)); letter-spacing: calc(-0.224px * var(--ts)); color: var(--ink-48); margin-top: 3px; }
+.ev__ttl { font-size: calc(16px * var(--ts)); font-weight: 600; line-height: 1.24; letter-spacing: calc(-0.352px * var(--ts)); }
+.ev__sub { font-size: calc(13px * var(--ts)); letter-spacing: calc(-0.2px * var(--ts)); color: var(--ink-48); margin-top: 2px; }
 .ev__chev { color: var(--ink-48); align-self: center; transition: transform .22s; }
 .ev.is-open .ev__chev { transform: rotate(90deg); }
 
@@ -357,11 +357,11 @@ svg { display: block; flex: none; }
 .settle__r b { font-weight: 600; }
 .settle__r em { margin-left: auto; font-style: normal; font-weight: 600; }
 
-.crow { display: flex; align-items: center; gap: var(--s-sm); padding: 14px var(--s-lg); border-top: 0.5px solid rgba(0,0,0,.07); }
+.crow { display: flex; align-items: center; gap: var(--s-sm); padding: 10px var(--s-lg); border-top: 0.5px solid rgba(0,0,0,.07); }
 .crow:first-child { border-top: none; }
 .crow__b { flex: 1; min-width: 0; }
-.crow__t { font-size: calc(17px * var(--ts)); font-weight: 600; line-height: 1.24; letter-spacing: calc(-0.374px * var(--ts)); }
-.crow__s { font-size: calc(14px * var(--ts)); letter-spacing: calc(-0.224px * var(--ts)); color: var(--ink-48); margin-top: 2px; }
+.crow__t { font-size: calc(16px * var(--ts)); font-weight: 600; line-height: 1.24; letter-spacing: calc(-0.352px * var(--ts)); }
+.crow__s { font-size: calc(13px * var(--ts)); letter-spacing: calc(-0.2px * var(--ts)); color: var(--ink-48); margin-top: 1px; }
 .crow__n { text-align: right; }
 .crow__n b { font-size: calc(17px * var(--ts)); font-weight: 600; letter-spacing: calc(-0.374px * var(--ts)); }
 .crow__n small { display: block; font-size: calc(12px * var(--ts)); letter-spacing: calc(-0.12px * var(--ts)); color: var(--ink-48); }
@@ -1245,7 +1245,7 @@ var APP_VERSION = 'v7 · 즉시 저장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b32 · 링크 촘촘하게';
+var BUILD = 'b33 · 일정·지출 촘촘하게';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
