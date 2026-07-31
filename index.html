@@ -1245,7 +1245,7 @@ var APP_VERSION = 'v7 · 즉시 저장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b35 · 좌표 찾기 개선';
+var BUILD = 'b36 · 좌표 모아 저장';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -1490,12 +1490,44 @@ function fillCoords(){
   var btn=$('bGeo'), found=0, failed=0, limited=false;
   btn.textContent='중단하기';
 
+  /* 찾은 좌표를 모았다 한 번에 씁니다. saveSchedule은 한 건에 6초가 넘고
+   * 매번 전체 데이터를 받아 화면을 다시 그리기까지 합니다. 건마다 하면
+   * 그것만으로 몇 분입니다. 다만 통째로 미루면 중간에 멈췄을 때 다 잃으므로
+   * 5개마다 한 번씩 흘려보냅니다. */
+  var pend=[];
+  function flush(){
+    if(!pend.length) return Promise.resolve();
+    var batch=pend; pend=[];
+    return api('saveCoords', batch)
+      .then(function(d){ var c=S.chat; apply(d); S.chat=c; })
+      .catch(function(e){
+        // 서버에 saveCoords가 아직 없으면(배포 전) 한 건씩 저장합니다.
+        // 이게 없으면 방금 찾은 좌표를 그냥 잃습니다.
+        if(String((e&&e.message)||'').indexOf('허용되지 않은 함수')===-1){
+          failed+=batch.length; found-=batch.length; return;
+        }
+        return batch.reduce(function(chain, it){
+          return chain.then(function(){
+            var p=find(S.plan, it.id); if(!p) return;
+            return api('saveSchedule', { id:p.id, day:p.day, time:p.time, cat:p.cat,
+              title:p.title, memo:p.memo, lat:it.lat, lng:it.lng })
+              .then(function(d){ var c=S.chat; apply(d); S.chat=c; })
+              .catch(function(){ failed++; found--; });
+          });
+        }, Promise.resolve());
+      });
+  }
+
+  var done=false;
   function finish(){
-    geoBusy=false;
-    btn.textContent='좌표 없는 일정 찾아 채우기';
-    renderGeoNote();
-    toast(found + '개 채웠습니다' + (failed?' · '+failed+'개 못 찾음':'') +
-          (limited?' · AI 한도 도달':'') + (geoStop&&!limited?' (중단)':''));
+    if(done) return; done=true;      // 중단과 완료가 겹쳐도 한 번만
+    flush().then(function(){
+      geoBusy=false;
+      btn.textContent='좌표 없는 일정 찾아 채우기';
+      renderGeoNote();
+      toast(found + '개 채웠습니다' + (failed?' · '+failed+'개 못 찾음':'') +
+            (limited?' · AI 한도 도달':'') + (geoStop&&!limited?' (중단)':''));
+    });
   }
 
   // 쉬지 않고 몰아치면 분당 제한에 걸립니다. 한 번 부를 때마다 잠시 쉽니다.
@@ -1514,10 +1546,16 @@ function fillCoords(){
 
       api('lookupPlace', qs[k]).then(function(r){
         if(r && r.ok && okCoord(r.lat, r.lng)){
-          return api('saveSchedule', { id:p.id, day:p.day, time:p.time, cat:p.cat,
-            title:p.title, memo:p.memo, lat:r.lat, lng:r.lng })
-            .then(function(d){ found++; var c=S.chat; apply(d); S.chat=c;
-              rest(function(){ next(i+1); }); });
+          found++;
+          // 저장은 모아서 하고 화면만 먼저 바꿉니다.
+          // flush 뒤에는 apply가 S를 갈아끼우므로 list의 옛 객체가 아니라
+          // 지금 S에 있는 것을 찾아 고쳐야 진행 표시가 맞습니다.
+          var cur=find(S.plan, p.id) || p;
+          cur.lat=r.lat; cur.lng=r.lng;
+          pend.push({ id:p.id, lat:r.lat, lng:r.lng });
+          renderGeoNote();
+          if(pend.length >= 5) return flush().then(function(){ rest(function(){ next(i+1); }); });
+          return rest(function(){ next(i+1); });
         }
         if(r && !r.ok && String(r.message||'').indexOf('한도')!==-1){
           limited=true; geoStop=true; return finish();
