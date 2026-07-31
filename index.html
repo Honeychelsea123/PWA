@@ -1261,7 +1261,7 @@ body.lndrag .lnk, body.lndrag .lgroup { touch-action: none; }
       <div class="f">
         <label>일정 좌표 채우기</label>
         <div class="sample"><div class="sample__s" id="geoNote">확인 중</div></div>
-        <button class="btn-primary" style="width:100%;margin-top:8px" id="bGeo">좌표 없는 일정 찾아 채우기</button>
+        <button class="btn-primary" style="width:100%;margin-top:8px" id="bGeo">좌표 없는 곳 찾아 채우기</button>
         <div class="sample__s" style="margin-top:6px">
           좌표가 있어야 지도 핀과 이동 시간 계산이 정확해집니다.
           한 곳당 AI를 1회 부르므로 시간이 걸립니다. 중간에 멈춰도 채운 곳은 남습니다.
@@ -1326,11 +1326,11 @@ function kc(name){ return KC[name] || 'var(--k-etc)'; }
 /* ═══════════ 상태 ═══════════ */
 var S = { trip:{}, plan:[], expense:[], link:[], categories:[], revision:-1 };
 var VIEW='home', fDay='ALL', fCat='ALL', lmap=null, marks=[], route=null, rate=9.0, syncOk=true;
-var APP_VERSION = 'v15 · 블로그 6곳';
+var APP_VERSION = 'v16 · 후보 좌표·빈시간 판정';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b56 · 후보 카드에서 삭제';
+var BUILD = 'b57 · 후보 좌표·지도에서 넣기';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -1608,8 +1608,16 @@ function load(){
    한도(429)에 걸리면 더 두드리지 않고 즉시 멈춥니다(HANDOFF 5장). */
 var geoBusy=false, geoStop=false;
 
+/* 좌표가 없는 것들. 일정과 후보를 한 목록으로 다룹니다 —
+ * 버튼을 따로 두면 사용자가 두 번 눌러야 하고, 어느 쪽이 남았는지도 헷갈립니다.
+ * kind는 저장할 때 어느 시트로 갈지 정하는 데 씁니다. */
 function needCoord(){
-  return (S.plan||[]).filter(function(p){ return !okCoord(p.lat, p.lng); });
+  var out = (S.plan||[]).filter(function(p){ return !okCoord(p.lat, p.lng); })
+    .map(function(p){ return { kind:'plan', id:p.id, title:p.title, ref:p }; });
+  (S.candidate||[]).forEach(function(c){
+    if(!okCoord(c.lat, c.lng)) out.push({ kind:'cand', id:c.id, title:c.title, ref:c });
+  });
+  return out;
 }
 
 /* lookupPlace는 '장소 이름'을 기대하는데 일정 제목은 그렇지 않은 게 많습니다.
@@ -1637,10 +1645,13 @@ function geoQueries(title){
 }
 function renderGeoNote(){
   var el=$('geoNote'); if(!el) return;
-  var total=(S.plan||[]).length, need=needCoord().length;
+  var total=(S.plan||[]).length + (S.candidate||[]).length;
+  var list=needCoord(), need=list.length;
+  var cn=list.filter(function(x){ return x.kind==='cand'; }).length;
   el.textContent = !total ? '일정이 없습니다'
-    : need===0 ? '전체 ' + total + '개 모두 좌표가 있습니다'
-    : total + '개 중 ' + need + '개에 좌표가 없습니다';
+    : need===0 ? '전체 ' + total + '곳 모두 좌표가 있습니다'
+    : total + '곳 중 ' + need + '곳에 좌표가 없습니다' +
+      (cn ? ' (후보 ' + cn + '곳 포함)' : '');
 }
 function fillCoords(){
   if(geoBusy){ geoStop=true; return toast('마무리하는 중…'); }   // 실행 중이면 중단 요청
@@ -1669,6 +1680,13 @@ function fillCoords(){
         }
         return batch.reduce(function(chain, it){
           return chain.then(function(){
+            if(it.kind === 'cand'){
+              var c0=find(candList(), it.id); if(!c0) return;
+              return api('saveCandidate', { id:c0.id, title:c0.title, cat:c0.cat,
+                addr:c0.addr, memo:c0.memo, src:c0.src, lat:it.lat, lng:it.lng })
+                .then(function(d){ var c=S.chat; apply(d); S.chat=c; })
+                .catch(function(){ failed++; found--; });
+            }
             var p=find(S.plan, it.id); if(!p) return;
             return api('saveSchedule', { id:p.id, day:p.day, time:p.time, cat:p.cat,
               title:p.title, memo:p.memo, lat:it.lat, lng:it.lng })
@@ -1684,7 +1702,7 @@ function fillCoords(){
     if(done) return; done=true;      // 중단과 완료가 겹쳐도 한 번만
     flush().then(function(){
       geoBusy=false;
-      btn.textContent='좌표 없는 일정 찾아 채우기';
+      btn.textContent='좌표 없는 곳 찾아 채우기';
       renderGeoNote();
       toast(found + '개 채웠습니다' + (failed?' · '+failed+'개 못 찾음':'') +
             (limited?' · AI 한도 도달':'') + (geoStop&&!limited?' (중단)':''));
@@ -1711,9 +1729,9 @@ function fillCoords(){
           // 저장은 모아서 하고 화면만 먼저 바꿉니다.
           // flush 뒤에는 apply가 S를 갈아끼우므로 list의 옛 객체가 아니라
           // 지금 S에 있는 것을 찾아 고쳐야 진행 표시가 맞습니다.
-          var cur=find(S.plan, p.id) || p;
+          var cur = (p.kind==='cand' ? find(candList(), p.id) : find(S.plan, p.id)) || p.ref;
           cur.lat=r.lat; cur.lng=r.lng;
-          pend.push({ id:p.id, lat:r.lat, lng:r.lng });
+          pend.push({ id:p.id, lat:r.lat, lng:r.lng, kind:p.kind });
           renderGeoNote();
           if(pend.length >= 5) return flush().then(function(){ rest(function(){ next(i+1); }); });
           return rest(function(){ next(i+1); });
@@ -2975,7 +2993,11 @@ function updatePins(){
     var mk=L.marker([Number(c.lat), Number(c.lng)], {icon:L.divIcon({
       className:'', html:'<div class="pin pin--cand"></div>', iconSize:[18,18], iconAnchor:[9,9]
     })}).addTo(lmap);
-    mk.bindPopup('<b>'+esc(c.title)+'</b><br>후보 여행지'+(c.addr?'<br>'+esc(c.addr):''));
+    /* 지도를 보다 "이 근처네" 싶을 때 그 자리에서 끝나게 합니다.
+       예전에는 지도를 보고 → 시트를 열고 → 그 후보를 다시 찾아야 했습니다.
+       data-cadd는 후보 목록에서 쓰는 것과 같은 처리로 갑니다. */
+    mk.bindPopup('<b>'+esc(c.title)+'</b><br>후보 여행지'+(c.addr?'<br>'+esc(c.addr):'')+
+      '<br><button class="link sm" data-cadd="'+esc(c.id)+'">일정에 넣기</button>');
     marks.push(mk);
   });
 
