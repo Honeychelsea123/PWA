@@ -3,7 +3,7 @@
  * 데이터 API(Apps Script)는 절대 캐시하지 않습니다 — 항상 네트워크로 보냅니다.
  * 캐시를 새로 배포하려면 CACHE 버전 숫자를 올리세요.
  */
-var CACHE = 'tokyo-pwa-v50';
+var CACHE = 'tokyo-pwa-v51';
 
 /* 앱 셸과 따로 두는 보관함입니다. 이름에 버전이 없어서 배포해도 안 지워집니다.
  * 폰트 조각·히어로 사진·지도 타일이 여기 쌓입니다.
@@ -115,6 +115,15 @@ self.addEventListener('fetch', function (e) {
        그러면 HTML 자체가 안 와서 앱이 시작조차 못 합니다. 화면이 오래 비어 있던
        진짜 이유가 이것이었습니다. 3초가 지나면 캐시로 화면부터 띄우고,
        네트워크가 뒤늦게 답하면 다음 실행을 위해 캐시만 갱신합니다. */
+    /* 비행기모드처럼 아예 연결이 없는 게 확실하면 기다릴 이유가 없습니다.
+       navigator.onLine이 false면 '확실히 오프라인'입니다(true는 못 믿지만
+       false는 믿을 수 있습니다). 바로 캐시로 띄웁니다 — 3초가 0초가 됩니다.
+       실측: 이 처리가 없을 때 비행기모드 부팅이 3059ms였습니다. */
+    if (self.navigator && self.navigator.onLine === false) {
+      e.respondWith(shell());
+      return;
+    }
+
     e.respondWith(new Promise(function (resolve) {
       var done = false;
       function finish(r) { if (!done && r) { done = true; resolve(r); } }
