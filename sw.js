@@ -3,7 +3,13 @@
  * 데이터 API(Apps Script)는 절대 캐시하지 않습니다 — 항상 네트워크로 보냅니다.
  * 캐시를 새로 배포하려면 CACHE 버전 숫자를 올리세요.
  */
-var CACHE = 'tokyo-pwa-v48';
+var CACHE = 'tokyo-pwa-v49';
+
+/* 앱 셸과 따로 두는 보관함입니다. 이름에 버전이 없어서 배포해도 안 지워집니다.
+ * 폰트 조각·히어로 사진·지도 타일이 여기 쌓입니다.
+ * 예전에는 이것들도 버전 캐시에 담겨서, 배포할 때마다 싹 지워졌습니다.
+ * 그 상태로 비행기모드에 들어가면 없는 파일을 기다리느라 화면이 한참 비어 있었습니다. */
+var RUNTIME = 'tokyo-pwa-runtime';
 
 /* 설치 때 미리 받아둘 앱 셸.
  * CDN 라이브러리(jsdelivr·unpkg)는 CORS 허용 응답이라 precache가 됩니다. */
@@ -41,7 +47,8 @@ self.addEventListener('activate', function (e) {
   e.waitUntil(
     caches.keys().then(function (keys) {
       return Promise.all(keys.map(function (k) {
-        if (k !== CACHE) return caches.delete(k);
+        // RUNTIME은 남깁니다. 지우면 폰트·사진을 오프라인에서 다시 못 구합니다.
+        if (k !== CACHE && k !== RUNTIME) return caches.delete(k);
       }));
     }).then(function () { return self.clients.claim(); })
   );
@@ -65,7 +72,7 @@ self.addEventListener('fetch', function (e) {
       fetch(req).then(function (res) {
         if (res && res.status === 200) {
           var copy = res.clone();
-          caches.open(CACHE).then(function (c) { c.put(req, copy); });
+          caches.open(RUNTIME).then(function (c) { c.put(req, copy); });
         }
         return res;
       /* 오프라인이고 받아둔 적도 없으면 caches.match가 undefined를 줍니다.
@@ -123,7 +130,8 @@ self.addEventListener('fetch', function (e) {
       return fetch(req).then(function (res) {
         if (res && (res.status === 200 || res.type === 'opaque')) {
           var copy = res.clone();
-          caches.open(CACHE).then(function (c) { c.put(req, copy); });
+          // 배포해도 살아남도록 RUNTIME에 담습니다
+          caches.open(RUNTIME).then(function (c) { c.put(req, copy); });
         }
         return res;
       /* 오프라인에서 캐시에 없는 것(지도 타일 등)은 조용히 비웁니다.
