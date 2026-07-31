@@ -1245,7 +1245,7 @@ var APP_VERSION = 'v7 · 즉시 저장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b34 · 카드 화살표 뺌';
+var BUILD = 'b35 · 좌표 찾기 개선';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -1450,6 +1450,30 @@ var geoBusy=false, geoStop=false;
 function needCoord(){
   return (S.plan||[]).filter(function(p){ return !okCoord(p.lat, p.lng); });
 }
+
+/* lookupPlace는 '장소 이름'을 기대하는데 일정 제목은 그렇지 않은 게 많습니다.
+ * "렘플러스 긴자 ➡️ 시부야 이동"은 두 지점이고 "아키하바라 쇼핑 & 점심"은 할 일입니다.
+ * 그래서 제목에서 찾을 만한 이름을 뽑아 넓혀가며 시도합니다.
+ * 이동 줄은 도착지를 씁니다. 그 일정이 끝났을 때 서 있는 자리가 도착지이고,
+ * 이동 시간 계산도 앞 장소→도착지가 맞는 구간입니다. */
+function geoQueries(title){
+  var t = String(title||'').replace(/[➡→⇒]️?|->/g, '>').replace(/\s+/g,' ').trim();
+  var out = [];
+  function add(s){
+    s = String(s||'').replace(/\s+/g,' ').trim();
+    if(s && out.indexOf(s) < 0) out.push(s);
+  }
+  var main = t.indexOf('>') !== -1 ? t.split('>').pop() : t;   // 도착지 또는 제목 전체
+  add(main.replace(/\s*이동\s*$/, ''));
+  if(t.indexOf('>') === -1) add(t);
+
+  // 할 일을 걷어내고 남는 이름 → 그래도 안 되면 지역 이름 하나
+  var base = main.split(/[&/·]/)[0]
+    .replace(/(쇼핑|점심|저녁|아침|브런치|산책|구경|관람|성지\s*순례|픽업|라스트|체크인|체크아웃|이동|출발|도착|입국|출국)/g, ' ');
+  add(base);
+  add(base.trim().split(' ')[0]);
+  return out.slice(0, 3);
+}
 function renderGeoNote(){
   var el=$('geoNote'); if(!el) return;
   var total=(S.plan||[]).length, need=needCoord().length;
@@ -1474,21 +1498,33 @@ function fillCoords(){
           (limited?' · AI 한도 도달':'') + (geoStop&&!limited?' (중단)':''));
   }
 
+  // 쉬지 않고 몰아치면 분당 제한에 걸립니다. 한 번 부를 때마다 잠시 쉽니다.
+  function rest(fn){ setTimeout(fn, 1500); }
+
   (function next(i){
     if(geoStop || i>=list.length) return finish();
-    var p=list[i];
-    $('geoNote').textContent = '(' + (i+1) + '/' + list.length + ') ' + nice(p.title);
-    api('lookupPlace', p.title).then(function(r){
-      if(r && r.ok && okCoord(r.lat, r.lng)){
-        return api('saveSchedule', { id:p.id, day:p.day, time:p.time, cat:p.cat,
-          title:p.title, memo:p.memo, lat:r.lat, lng:r.lng })
-          .then(function(d){ found++; var c=S.chat; apply(d); S.chat=c; });
-      }
-      failed++;
-      if(r && !r.ok && String(r.message||'').indexOf('한도')!==-1){ limited=true; geoStop=true; }
-    }).catch(function(){ failed++; })
-      // 쉬지 않고 몰아치면 분당 제한에 걸립니다. 한 건마다 잠시 쉽니다.
-      .then(function(){ setTimeout(function(){ next(i+1); }, 1500); });
+    var p=list[i], qs=geoQueries(p.title);
+
+    (function tryQ(k){
+      if(geoStop) return finish();
+      if(k >= qs.length){ failed++; return rest(function(){ next(i+1); }); }
+
+      $('geoNote').textContent = '(' + (i+1) + '/' + list.length + ') ' + qs[k] +
+        (k ? ' — ' + (k+1) + '번째 시도' : '');
+
+      api('lookupPlace', qs[k]).then(function(r){
+        if(r && r.ok && okCoord(r.lat, r.lng)){
+          return api('saveSchedule', { id:p.id, day:p.day, time:p.time, cat:p.cat,
+            title:p.title, memo:p.memo, lat:r.lat, lng:r.lng })
+            .then(function(d){ found++; var c=S.chat; apply(d); S.chat=c;
+              rest(function(){ next(i+1); }); });
+        }
+        if(r && !r.ok && String(r.message||'').indexOf('한도')!==-1){
+          limited=true; geoStop=true; return finish();
+        }
+        rest(function(){ tryQ(k+1); });        // 이름을 넓혀 다시 시도합니다
+      }).catch(function(){ rest(function(){ tryQ(k+1); }); });
+    })(0);
   })(0);
 }
 
