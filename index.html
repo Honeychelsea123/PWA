@@ -833,6 +833,16 @@ button.dt__row:active { transform: scale(0.98); }
 .sechd h3 { flex: 1; font-size: calc(21px * var(--ts)); font-weight: 600; letter-spacing: calc(0.23px * var(--ts)); }
 .sechd__n { font-size: calc(14px * var(--ts)); color: var(--ink-48); }
 
+/* 제목을 눌러 접고 폅니다. 화살표만 누르게 하면 표적이 너무 작습니다 */
+.sechd__b {
+  display: flex; align-items: baseline; gap: var(--s-xs);
+  flex: 1; min-width: 0; min-height: 44px; color: var(--ink);
+}
+.sechd__b h3 { flex: 1; }
+.sechd__c { flex: none; color: var(--ink-48); transform: rotate(90deg); transition: transform .2s; }
+.sechd__b[aria-expanded="false"] .sechd__c { transform: rotate(0deg); }
+.sec.is-folded > .secbody { display: none; }
+
 .pbar { height: 5px; border-radius: var(--r-pill); background: rgba(0,0,0,.07); margin: 0 var(--s-lg) var(--s-xs); overflow: hidden; }
 .pbar i { display: block; height: 100%; border-radius: var(--r-pill); background: var(--primary); transition: width .3s; }
 
@@ -926,8 +936,8 @@ button.dt__row:active { transform: scale(0.98); }
 
   <!-- 준비물 -->
   <section class="view" id="v-link">
-    <div id="packList"></div>
     <div id="linkList"></div>
+    <div id="packList"></div>
   </section>
 
   <div class="boot" id="boot"><span class="boot__b"></span><span>불러오는 중</span></div>
@@ -1187,7 +1197,7 @@ var APP_VERSION = 'v7 · 즉시 저장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b25 · 빠른 입력 제거';
+var BUILD = 'b26 · 준비물 순서·접기';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -2039,16 +2049,48 @@ function renderSettle(list){
 /* ═══════════ 준비물 체크리스트 ═══════════ */
 var PCATS = ['서류','전자기기','금전','생활','기타'];
 
+/* ═══════════ 구역 접기 ═══════════
+   접힘 상태를 기기에 남깁니다. 목록을 다시 그려도 유지되어야 하기 때문입니다. */
+var FOLD_KEY = 'tripai.fold.v1';
+function readFold(){
+  try { return JSON.parse(localStorage.getItem(FOLD_KEY) || '{}') || {}; } catch(e){ return {}; }
+}
+function isFolded(k){ return !!readFold()[k]; }
+function toggleFold(k){
+  var f = readFold(); f[k] = !f[k];
+  try { localStorage.setItem(FOLD_KEY, JSON.stringify(f)); } catch(e){}
+  var sec = document.querySelector('[data-sec="'+k+'"]');
+  if(!sec) return;
+  sec.classList.toggle('is-folded', !!f[k]);
+  var b = sec.querySelector('.sechd__b');
+  if(b) b.setAttribute('aria-expanded', f[k] ? 'false' : 'true');
+}
+/* 접을 수 있는 구역의 머리말. 제목 전체가 눌리는 표적입니다 —
+   화살표만 누르게 하면 손가락으로 맞히기 어렵습니다. */
+function secHead(key, title, extra, addId){
+  return '<div class="sechd">' +
+    '<button class="sechd__b" data-fold="'+key+'" aria-expanded="'+(isFolded(key)?'false':'true')+'">' +
+      '<h3>'+esc(title)+'</h3>' + (extra||'') +
+      '<span class="sechd__c">'+ico('chev',18)+'</span>' +
+    '</button>' +
+    (addId ? '<button class="link sm" id="'+addId+'">추가</button>' : '') +
+  '</div>';
+}
+function secWrap(key, head, body){
+  return '<div class="sec'+(isFolded(key)?' is-folded':'')+'" data-sec="'+key+'">' +
+    head + '<div class="secbody">' + body + '</div></div>';
+}
+
 function renderPack(){
   var list = S.pack || [];
   var done = list.filter(function(p){ return p.done; }).length;
-  var head = '<div class="sechd"><h3>준비물</h3>'+
-    (list.length?'<span class="sechd__n">'+done+' / '+list.length+'</span>':'')+
-    '<button class="link sm" id="pkAdd">추가</button></div>';
+  var head = secHead('pack', '준비물',
+    list.length ? '<span class="sechd__n" id="pkCount">'+done+' / '+list.length+'</span>' : '',
+    'pkAdd');
 
   if(!list.length){
-    $('packList').innerHTML = head +
-      '<div class="stack"><div class="card glass"><div class="ucard__s">챙길 것을 넣어두면 출발 전에 하나씩 지울 수 있습니다.</div></div></div>';
+    $('packList').innerHTML = secWrap('pack', head,
+      '<div class="stack"><div class="card glass"><div class="ucard__s">챙길 것을 넣어두면 출발 전에 하나씩 지울 수 있습니다.</div></div></div>');
     return;
   }
 
@@ -2067,9 +2109,9 @@ function renderPack(){
     }).join('');
   }).join('');
 
-  $('packList').innerHTML = head +
+  $('packList').innerHTML = secWrap('pack', head,
     '<div class="pbar"><i style="width:'+(list.length?done/list.length*100:0).toFixed(1)+'%"></i></div>' +
-    '<div class="stack"><div class="tlcard glass">'+body+'</div></div>';
+    '<div class="stack"><div class="tlcard glass">'+body+'</div></div>');
 }
 
 function togglePack(id){
@@ -2081,7 +2123,8 @@ function togglePack(id){
     el.closest('.pk').classList.toggle('is-done', next); }
   var list=S.pack||[], d=list.filter(function(x){return x.done}).length;
   var bar=document.querySelector('.pbar i'); if(bar) bar.style.width=(d/list.length*100).toFixed(1)+'%';
-  var n=document.querySelector('.sechd__n'); if(n) n.textContent=d+' / '+list.length;
+  // id로 집습니다. 화면 순서가 바뀌면 .sechd__n 첫 번째가 링크 쪽일 수 있습니다.
+  var n=$('pkCount'); if(n) n.textContent=d+' / '+list.length;
 
   api('togglePack', id, next).catch(function(){ toast('저장하지 못했습니다'); });
 }
@@ -2109,13 +2152,15 @@ function savePackRow(){
 /* ═══════════ 링크 ═══════════ */
 function renderLinks(){
   var box=$('linkList');
-  var head='<div class="sechd"><h3>링크</h3><button class="link sm" id="lnAdd">추가</button></div>';
+  var head=secHead('link', '링크',
+    S.link.length ? '<span class="sechd__n">'+S.link.length+'</span>' : '', 'lnAdd');
   if(!S.link.length){
-    box.innerHTML=head+'<div class="stack"><div class="card glass"><div class="ucard__s">자주 쓰는 사이트를 모아두세요.</div></div></div>';
+    box.innerHTML=secWrap('link', head,
+      '<div class="stack"><div class="card glass"><div class="ucard__s">자주 쓰는 사이트를 모아두세요.</div></div></div>');
     return;
   }
   var g={}; S.link.forEach(function(l){ (g[l.category||'기타']=g[l.category||'기타']||[]).push(l); });
-  box.innerHTML=head+Object.keys(g).map(function(k){
+  box.innerHTML=secWrap('link', head, Object.keys(g).map(function(k){
     return '<div class="lgroup">'+esc(k)+'</div><div class="stack">'+g[k].map(function(l){
       var u=safeUrl(l.url);
       return '<div class="card glass"><div class="ucard__t">'+esc(l.title)+'</div>'+
@@ -2123,7 +2168,7 @@ function renderLinks(){
         '<div class="ucard__f">'+(u?'<a class="link sm" href="'+esc(u)+'" target="_blank" rel="noopener">열기</a>':'')+
         '<button class="link sm" data-elink="'+esc(l.id)+'">수정</button></div></div>';
     }).join('')+'</div>';
-  }).join('');
+  }).join(''));
 }
 
 /* ═══════════ 선택지 ═══════════ */
@@ -2476,6 +2521,7 @@ function bind(){
       }).join(''));
       scrollChat(); return;
     }
+    if((el=t.closest('[data-fold]'))) return toggleFold(el.dataset.fold);
     if((el=t.closest('[data-undo]'))) return undoAct(el.dataset.undo);
     if((el=t.closest('[data-do]'))) return doAct(el.dataset.do);
     if((el=t.closest('[data-fix]'))) return fixAct(el.dataset.fix);
