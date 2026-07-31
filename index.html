@@ -1245,7 +1245,7 @@ var APP_VERSION = 'v7 · 즉시 저장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b33 · 일정·지출 촘촘하게';
+var BUILD = 'b34 · 카드 화살표 뺌';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -2217,7 +2217,7 @@ function renderLinks(){
         '<button data-gmove="up" data-gcat="'+esc(k)+'" aria-label="구분 위로 옮기기"'+(gi===0?' disabled':'')+'>'+ico('up',17)+'</button>'+
         '<button data-gmove="down" data-gcat="'+esc(k)+'" aria-label="구분 아래로 옮기기"'+(gi===keys.length-1?' disabled':'')+'>'+ico('down',17)+'</button>'+
       '</span>' : '')+
-      '</div><div class="stack" data-lgrp="'+esc(k)+'">'+g[k].map(function(l, i){
+      '</div><div class="stack" data-lgrp="'+esc(k)+'">'+g[k].map(function(l){
       var u=safeUrl(l.url);
       return '<div class="card glass lnk" data-lid="'+esc(l.id)+'">'+
         '<div class="lnk__m">'+
@@ -2227,13 +2227,9 @@ function renderLinks(){
         '<div class="lnk__a">'+
           (u?'<a class="link sm" href="'+esc(u)+'" target="_blank" rel="noopener">열기</a>':'')+
           '<button class="link sm" data-elink="'+esc(l.id)+'">수정</button>'+
-          (g[k].length>1 ? '<span class="lord">'+
-            '<button data-lmove="up" data-lid="'+esc(l.id)+'" aria-label="위로 옮기기"'+(i===0?' disabled':'')+'>'+ico('up',16)+'</button>'+
-            '<button data-lmove="down" data-lid="'+esc(l.id)+'" aria-label="아래로 옮기기"'+(i===g[k].length-1?' disabled':'')+'>'+ico('down',16)+'</button>'+
-          '</span>' : '')+
         '</div></div>';
     }).join('')+'</div></div>';
-  }).join('') + (S.link.length>1 ? '<div class="lhint">↑↓ 로 순서를 바꿉니다. 카드나 구분 이름을 길게 눌러 끌어도 됩니다.</div>' : ''));
+  }).join('') + (S.link.length>1 ? '<div class="lhint">카드를 길게 눌러 끌면 순서가 바뀝니다. 구분은 ↑↓ 로도 됩니다.</div>' : ''));
   initLinkDrag();
 }
 
@@ -2307,23 +2303,6 @@ function lnSaveOrder(){
       toast('순서 저장 실패: ' + (e.message || e)); load();
     });
   }, 700);
-}
-
-/* ↑↓ 버튼 — 제스처가 안 먹는 상황에서도 확실히 순서를 바꿀 수 있는 길입니다.
- * 끌기와 같은 저장 경로(reorderLinks)를 씁니다. */
-function moveLink(id, dir){
-  var l = find(S.link, id); if(!l) return;
-  var cat = l.category || '기타';
-  var idxs = [];                      // 같은 구분에 속한 것들의 S.link 위치
-  S.link.forEach(function(x, i){ if((x.category||'기타') === cat) idxs.push(i); });
-  var at = idxs.indexOf(S.link.indexOf(l));
-  var to = at + (dir === 'up' ? -1 : 1);
-  if(at < 0 || to < 0 || to >= idxs.length) return;
-
-  var a = idxs[at], b = idxs[to];
-  var tmp = S.link[a]; S.link[a] = S.link[b]; S.link[b] = tmp;
-  renderLinks();
-  lnSaveOrder();
 }
 
 /* 구분 통째로 옮기기. 구분에는 자기 순서를 적어둘 자리가 없으므로
@@ -2739,7 +2718,6 @@ function bind(){
     if(t.closest('#bkDel')) return del('deleteBooking',$('bkId').value,'이 예약','sBook');
     if((el=t.closest('[data-copy]'))) return copyText(el.dataset.copy);
     if((el=t.closest('[data-gmove]'))) return moveGroup(el.dataset.gcat, el.dataset.gmove);
-    if((el=t.closest('[data-lmove]'))) return moveLink(el.dataset.lid, el.dataset.lmove);
     if((el=t.closest('[data-elink]'))) return openLink(find(S.link,el.dataset.elink));
     if((el=t.closest('[data-pk]'))) return togglePack(el.dataset.pk);
     if((el=t.closest('[data-pke]'))) return openPack(find(S.pack||[],el.dataset.pke));
