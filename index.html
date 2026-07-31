@@ -1311,11 +1311,11 @@ function kc(name){ return KC[name] || 'var(--k-etc)'; }
 /* ═══════════ 상태 ═══════════ */
 var S = { trip:{}, plan:[], expense:[], link:[], categories:[], revision:-1 };
 var VIEW='home', fDay='ALL', fCat='ALL', lmap=null, marks=[], route=null, rate=9.0, syncOk=true;
-var APP_VERSION = 'v10 · 후보 맥락';
+var APP_VERSION = 'v11 · 추천 신호';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b43 · AI 추천 질문 단순화';
+var BUILD = 'b44 · 추천 신호 전달';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -2436,10 +2436,11 @@ function openCandList(){ renderCandidates(); open_('sCandList'); }
 function askCandAi(){
   close_('sCandList');
   openChat();
-  /* 짧게 보내야 합니다. 서버는 이 문장을 그대로 검색어로도 씁니다.
-     제외 목록까지 붙여 길게 보냈더니 검색어가 오염돼 엉뚱한 블로그가 딸려 왔습니다.
-     빼야 할 곳은 서버가 [일정]과 [담아둔 후보 여행지]로 이미 알고 있습니다. */
-  sendAi('가볼 만한 곳 추천해줘');
+  /* 문장은 짧게, 뜻은 ctx로 보냅니다.
+     서버는 사용자 문장을 검색어로도 쓰기 때문에, 조건을 길게 적으면 검색어가 흐려집니다.
+     그렇다고 짧게만 보내면 AI가 단순 질문으로 보고 설명만 하고 끝냅니다.
+     want:'candidate'가 "카드로 3개 제안하라"는 뜻을 대신 전합니다. */
+  sendAi('가볼 만한 곳 추천해줘', { want: 'candidate' });
 }
 
 function openCand(c){
@@ -3183,7 +3184,7 @@ function drawFindings(bubble, list){
   bubble.appendChild(box); scrollChat();
 }
 
-function sendAi(text){
+function sendAi(text, extra){
   var v = (typeof text==='string' ? text : $('aiIn').value).trim();
   if(!v && !shotData) return;
   var img = shotData;
@@ -3200,6 +3201,7 @@ function sendAi(text){
 
   var ctx = { weather: window._w || '' };
   if(useLoc && myPos){ ctx.lat=myPos.lat; ctx.lng=myPos.lng; }
+  if(extra) for(var ek in extra) ctx[ek]=extra[ek];   // 버튼이 보내는 신호(want 등)
 
   api('chatAI', v || '이 사진 봐줘', ctx, img ? { mime: img.mime, data: img.data } : null).then(function(r){
     wait.remove(); $('aiSend').disabled=false;
