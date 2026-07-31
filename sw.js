@@ -3,7 +3,7 @@
  * 데이터 API(Apps Script)는 절대 캐시하지 않습니다 — 항상 네트워크로 보냅니다.
  * 캐시를 새로 배포하려면 CACHE 버전 숫자를 올리세요.
  */
-var CACHE = 'tokyo-pwa-v49';
+var CACHE = 'tokyo-pwa-v50';
 
 /* 앱 셸과 따로 두는 보관함입니다. 이름에 버전이 없어서 배포해도 안 지워집니다.
  * 폰트 조각·히어로 사진·지도 타일이 여기 쌓입니다.
@@ -54,6 +54,25 @@ self.addEventListener('activate', function (e) {
   );
 });
 
+/* 캐시에 있는 앱 화면을 여러 이름으로 찾아봅니다.
+ * 하나도 없으면 안내 페이지라도 돌려줍니다 — respondWith에 undefined가 가면
+ * 브라우저가 네트워크 오류 화면을 띄웁니다. */
+function shell() {
+  return caches.match('index.html')
+    .then(function (hit) { return hit || caches.match('./'); })
+    .then(function (hit) {
+      return hit || new Response(
+        '<!doctype html><meta charset="utf-8">' +
+        '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+        '<div style="font:16px -apple-system,sans-serif;padding:40px;text-align:center">' +
+        '<h1 style="font-size:20px">오프라인</h1>' +
+        '<p style="color:#666">앱 파일을 캐시에서 찾지 못했습니다.<br>' +
+        '인터넷이 되는 곳에서 한 번 열면 다음부터 오프라인에서도 열립니다.</p></div>',
+        { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+      );
+    });
+}
+
 self.addEventListener('fetch', function (e) {
   var req = e.request;
 
@@ -91,37 +110,31 @@ self.addEventListener('fetch', function (e) {
   // cache:'reload'로 HTTP 캐시를 건너뜁니다. 이게 없으면 max-age=600 때문에
   // 새로 배포해도 최대 10분간 옛 화면이 뜹니다.
   if (req.mode === 'navigate') {
-    e.respondWith(
+    /* 네트워크를 먼저 쓰되 3초만 기다립니다.
+       비행기모드에서 이 fetch가 즉시 거부되지 않고 한참 매달리는 일이 있습니다.
+       그러면 HTML 자체가 안 와서 앱이 시작조차 못 합니다. 화면이 오래 비어 있던
+       진짜 이유가 이것이었습니다. 3초가 지나면 캐시로 화면부터 띄우고,
+       네트워크가 뒤늦게 답하면 다음 실행을 위해 캐시만 갱신합니다. */
+    e.respondWith(new Promise(function (resolve) {
+      var done = false;
+      function finish(r) { if (!done && r) { done = true; resolve(r); } }
+
+      var timer = setTimeout(function () { shell().then(finish); }, 3000);
+
       fetch(req.url, { cache: 'reload' }).then(function (res) {
-        /* 예전에는 상태만 보고 그대로 돌려줬습니다. 그런데 비행기모드에서
-           fetch가 거부되지 않고 실패한 응답(status 0 등)을 주는 경우가 있어
-           그게 그대로 화면에 나가 앱이 안 떴습니다. 성공이 아니면 캐시로 넘깁니다. */
-        if (!res || !res.ok) throw new Error('네트워크 응답이 정상이 아닙니다');
+        clearTimeout(timer);
+        if (!res || !res.ok) return shell().then(finish);
         var copy = res.clone();
         caches.open(CACHE).then(function (c) { c.put('index.html', copy); });
-        return res;
+        finish(res);
       }).catch(function () {
-        /* 캐시를 여러 이름으로 찾아봅니다. 어느 하나라도 있으면 앱이 뜹니다.
-           그리고 respondWith에 undefined가 가면 브라우저가 네트워크 오류 화면을
-           띄웁니다. 그래서 마지막에 반드시 무언가를 돌려줍니다. */
-        return caches.match('index.html')
-          .then(function (hit) { return hit || caches.match('./'); })
-          .then(function (hit) { return hit || caches.match(req.url); })
-          .then(function (hit) {
-            return hit || new Response(
-              '<!doctype html><meta charset="utf-8">' +
-              '<meta name="viewport" content="width=device-width,initial-scale=1">' +
-              '<div style="font:16px -apple-system,sans-serif;padding:40px;text-align:center">' +
-              '<h1 style="font-size:20px">오프라인</h1>' +
-              '<p style="color:#666">앱 파일을 캐시에서 찾지 못했습니다.<br>' +
-              '인터넷이 되는 곳에서 한 번 열면 다음부터 오프라인에서도 열립니다.</p></div>',
-              { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
-            );
-          });
-      })
-    );
+        clearTimeout(timer);
+        shell().then(finish);
+      });
+    }));
     return;
   }
+
 
   // 그 외 GET(정적 자원·지도 타일 등): 캐시 우선, 없으면 네트워크 후 캐시에 저장.
   e.respondWith(
