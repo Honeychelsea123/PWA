@@ -1315,7 +1315,7 @@ var APP_VERSION = 'v15 · 블로그 6곳';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b47 · v15 맞춤';
+var BUILD = 'b48 · 제안에서 바로 일정으로';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -2818,7 +2818,7 @@ function find(a,id){ for(var i=0;i<a.length;i++) if(String(a[i].id)===String(id)
 
 function openPlan(p){
   busySave['plan']=false;
-  pFromCand=null;          // 후보에서 온 게 아니면 항상 비웁니다
+  pFromCand=null; pFromAct=null;   // 후보·제안에서 온 게 아니면 항상 비웁니다
   p=p||{};
   $('planH').textContent=p.id?'일정 수정':'일정 추가';
   $('pId').value=p.id||''; $('pDay').value=p.day||(fDay==='ALL'?(todayDay()||1):fDay);
@@ -2868,8 +2868,10 @@ function savePlan(){
     cat:$('pCat').value, title:$('pTitle').value.trim(), memo:$('pMemo').value.trim(),
     lat: pFound?pFound.lat:'', lng: pFound?pFound.lng:'' };
   var fromCand=pFromCand; pFromCand=null;
+  var fromAct=pFromAct; pFromAct=null;
   close_('sPlan');                       // 기다리지 않고 바로 닫습니다
   optimistic('plan', rec, renderAllPlan);
+  if(fromAct) markActDone(fromAct);      // 제안 카드에서 온 것은 카드도 정리합니다
 
   if(fromCand){
     // 일정 저장이 끝난 뒤에 후보를 지웁니다. 먼저 지우면 저장이 실패했을 때 둘 다 잃습니다.
@@ -3059,6 +3061,7 @@ function bind(){
     }
     if((el=t.closest('[data-fold]'))) return toggleFold(el.dataset.fold);
     if((el=t.closest('[data-undo]'))) return undoAct(el.dataset.undo);
+    if((el=t.closest('[data-toplan]'))) return actToPlan(el.dataset.toplan);
     if((el=t.closest('[data-do]'))) return doAct(el.dataset.do);
     if((el=t.closest('[data-fix]'))) return fixAct(el.dataset.fix);
     if((el=t.closest('[data-skip]'))) return skipAct(el.dataset.skip);
@@ -3347,7 +3350,8 @@ function actCard(k, a){
         ' · 날짜는 나중에</span></div>'+
       (a.addr?'<div class="act__m"><span>'+esc(a.addr)+'</span></div>':'')+
       (a.why?'<div class="act__why">'+esc(a.why)+'</div>':'')+
-      '<div class="act__f"><button class="link sm" data-do="'+k+'">후보 여행지에 담기</button>'+
+      '<div class="act__f"><button class="link sm" data-toplan="'+k+'">일정에 넣기</button>'+
+        '<button class="link sm" data-do="'+k+'">후보에 담기</button>'+
         '<button class="link-quiet" style="margin-left:auto" data-skip="'+k+'">무시</button></div></div>';
   }
   var TAG={add:['t-add','추가'], edit:['t-edit','수정'], delete:['t-del','삭제']}[a.type];
@@ -3408,6 +3412,28 @@ function undoAct(k){
     if(card) card.classList.remove('is-busy');
     toast('되돌리지 못했습니다: '+(e.message||e));
   });
+}
+
+/* 제안 카드에서 곧바로 일정으로. 후보를 거치지 않습니다.
+ * candidate 제안에는 날짜·시간이 없으므로 일정 시트를 채워서 열고 그 둘만 고르게 합니다.
+ * 대화창(sAi)이 일정 시트(sPlan)보다 DOM 뒤라 안 닫으면 시트를 덮습니다. */
+var pFromAct = null;
+function actToPlan(k){
+  var a=pending[k]; if(!a) return;
+  close_('sAi');
+  openPlan({ title:a.title, cat:a.cat, memo:a.memo, lat:a.lat, lng:a.lng });
+  pFromAct=k;                       // openPlan이 먼저 비우므로 그 뒤에
+  $('planH').textContent='제안을 일정으로';
+}
+
+/** 일정으로 옮긴 제안 카드를 처리 완료로 표시합니다 */
+function markActDone(k){
+  var card=document.querySelector('[data-card="'+k+'"]');
+  if(card){
+    card.classList.add('is-done');
+    card.insertAdjacentHTML('beforeend','<div class="act__done">일정에 넣었습니다</div>');
+  }
+  delete pending[k];
 }
 
 function doAct(k){
