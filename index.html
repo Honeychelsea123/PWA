@@ -1311,11 +1311,11 @@ function kc(name){ return KC[name] || 'var(--k-etc)'; }
 /* ═══════════ 상태 ═══════════ */
 var S = { trip:{}, plan:[], expense:[], link:[], categories:[], revision:-1 };
 var VIEW='home', fDay='ALL', fCat='ALL', lmap=null, marks=[], route=null, rate=9.0, syncOk=true;
-var APP_VERSION = 'v12 · 이름 표기';
+var APP_VERSION = 'v14 · 블로그 링크 읽기';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b45 · v12 맞춤';
+var BUILD = 'b46 · 블로그 링크 안내';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -2405,8 +2405,9 @@ function renderCandidates(){
   var box=$('candList'); if(!box) return;
   if(!list.length){
     box.innerHTML='<div class="ucard__s">' +
-      '날짜를 정하기 전에 가보고 싶은 곳을 모아두는 곳입니다. ' +
-      'AI에게 블로그 캡처를 보여주거나 "여기 어때?"라고 물으면 여기로 담아줍니다.' +
+      '날짜를 정하기 전에 가보고 싶은 곳을 모아두는 곳입니다.<br>' +
+      'AI 대화창에 <b>블로그 링크를 붙여넣으면</b> 글을 읽고 거기 나온 장소를 담아줍니다. ' +
+      '캡처 사진을 보내거나 "여기 어때?"라고 물어도 됩니다.' +
       '</div>';
     return;
   }
