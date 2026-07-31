@@ -1311,11 +1311,11 @@ function kc(name){ return KC[name] || 'var(--k-etc)'; }
 /* ═══════════ 상태 ═══════════ */
 var S = { trip:{}, plan:[], expense:[], link:[], categories:[], revision:-1 };
 var VIEW='home', fDay='ALL', fCat='ALL', lmap=null, marks=[], route=null, rate=9.0, syncOk=true;
-var APP_VERSION = 'v9 · 검색 관련도';
+var APP_VERSION = 'v10 · 후보 맥락';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b42 · v9 맞춤';
+var BUILD = 'b43 · AI 추천 질문 단순화';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -2434,13 +2434,12 @@ function openCandList(){ renderCandidates(); open_('sCandList'); }
  * 이미 담긴 곳을 적어 보내야 같은 곳을 또 추천하지 않습니다.
  * 서버는 날짜 없는 장소를 candidate 액션으로 내주므로 '담기' 카드로 바로 붙습니다. */
 function askCandAi(){
-  var have=candList().map(function(c){ return c.title; });
   close_('sCandList');
   openChat();
-  var q='가볼 만한 곳을 3곳 후보 여행지로 추천해줘. 날짜는 아직 안 정할 거야.\n' +
-        '이미 일정에 있는 곳은 빼줘.' +
-        (have.length ? ' 후보에 이미 담은 것도 빼줘: ' + have.join(', ') : '');
-  sendAi(q);
+  /* 짧게 보내야 합니다. 서버는 이 문장을 그대로 검색어로도 씁니다.
+     제외 목록까지 붙여 길게 보냈더니 검색어가 오염돼 엉뚱한 블로그가 딸려 왔습니다.
+     빼야 할 곳은 서버가 [일정]과 [담아둔 후보 여행지]로 이미 알고 있습니다. */
+  sendAi('가볼 만한 곳 추천해줘');
 }
 
 function openCand(c){
