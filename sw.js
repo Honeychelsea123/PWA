@@ -3,7 +3,7 @@
  * 데이터 API(Apps Script)는 절대 캐시하지 않습니다 — 항상 네트워크로 보냅니다.
  * 캐시를 새로 배포하려면 CACHE 버전 숫자를 올리세요.
  */
-var CACHE = 'tokyo-pwa-v51';
+var CACHE = 'tokyo-pwa-v52';
 
 /* 앱 셸과 따로 두는 보관함입니다. 이름에 버전이 없어서 배포해도 안 지워집니다.
  * 폰트 조각·히어로 사진·지도 타일이 여기 쌓입니다.
@@ -106,41 +106,36 @@ self.addEventListener('fetch', function (e) {
     return;
   }
 
-  // 페이지 이동 요청: 네트워크 우선, 오프라인이면 캐시된 셸을 돌려줍니다.
-  // cache:'reload'로 HTTP 캐시를 건너뜁니다. 이게 없으면 max-age=600 때문에
-  // 새로 배포해도 최대 10분간 옛 화면이 뜹니다.
+  // 페이지 이동 요청
   if (req.mode === 'navigate') {
-    /* 네트워크를 먼저 쓰되 3초만 기다립니다.
-       비행기모드에서 이 fetch가 즉시 거부되지 않고 한참 매달리는 일이 있습니다.
-       그러면 HTML 자체가 안 와서 앱이 시작조차 못 합니다. 화면이 오래 비어 있던
-       진짜 이유가 이것이었습니다. 3초가 지나면 캐시로 화면부터 띄우고,
-       네트워크가 뒤늦게 답하면 다음 실행을 위해 캐시만 갱신합니다. */
-    /* 비행기모드처럼 아예 연결이 없는 게 확실하면 기다릴 이유가 없습니다.
-       navigator.onLine이 false면 '확실히 오프라인'입니다(true는 못 믿지만
-       false는 믿을 수 있습니다). 바로 캐시로 띄웁니다 — 3초가 0초가 됩니다.
-       실측: 이 처리가 없을 때 비행기모드 부팅이 3059ms였습니다. */
-    if (self.navigator && self.navigator.onLine === false) {
-      e.respondWith(shell());
-      return;
-    }
+    /* 캐시가 있으면 그것부터 즉시 돌려줍니다. 네트워크는 뒤에서 받아 캐시만 갱신합니다.
+     *
+     * 처음에는 네트워크를 먼저 쓰고 3초만 기다렸는데, 비행기모드에서 그 3초를
+     * 통째로 버렸습니다(실측 3059ms). navigator.onLine으로 건너뛰려 했지만
+     * 그 값도 믿을 게 못 됐습니다(3063ms). 그래서 아예 기다리지 않습니다.
+     *
+     * 새 버전이 한 번 늦게 보이는 대가를 치릅니다. 하지만 sw.js가 바뀌면
+     * controllerchange에서 자동으로 새로고침하므로 곧바로 따라잡습니다. */
+    e.respondWith(
+      caches.match('index.html')
+        .then(function (hit) { return hit || caches.match('./'); })
+        .then(function (hit) {
+          var net = fetch(req.url, { cache: 'reload' }).then(function (res) {
+            if (res && res.ok) {
+              var copy = res.clone();
+              caches.open(CACHE).then(function (c) { c.put('index.html', copy); });
+            }
+            return res;
+          }).catch(function () { return null; });
 
-    e.respondWith(new Promise(function (resolve) {
-      var done = false;
-      function finish(r) { if (!done && r) { done = true; resolve(r); } }
-
-      var timer = setTimeout(function () { shell().then(finish); }, 3000);
-
-      fetch(req.url, { cache: 'reload' }).then(function (res) {
-        clearTimeout(timer);
-        if (!res || !res.ok) return shell().then(finish);
-        var copy = res.clone();
-        caches.open(CACHE).then(function (c) { c.put('index.html', copy); });
-        finish(res);
-      }).catch(function () {
-        clearTimeout(timer);
-        shell().then(finish);
-      });
-    }));
+          if (hit) {
+            e.waitUntil(net);      // 갱신은 뒤에서 마저 끝내게 둡니다
+            return hit;
+          }
+          // 캐시가 아직 없는 첫 실행에서만 네트워크를 기다립니다
+          return net.then(function (res) { return (res && res.ok) ? res : shell(); });
+        })
+    );
     return;
   }
 
