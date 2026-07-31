@@ -366,7 +366,7 @@ svg { display: block; flex: none; }
 .crow__n b { font-size: calc(17px * var(--ts)); font-weight: 600; letter-spacing: calc(-0.374px * var(--ts)); }
 .crow__n small { display: block; font-size: calc(12px * var(--ts)); letter-spacing: calc(-0.12px * var(--ts)); color: var(--ink-48); }
 
-.lgroup { padding: var(--s-lg) var(--s-lg) 0; font-size: calc(14px * var(--ts)); font-weight: 600; letter-spacing: calc(-0.224px * var(--ts)); color: var(--ink-48); }
+.lgroup { padding: var(--s-lg) var(--s-lg) 0; font-size: calc(14px * var(--ts)); font-weight: 600; letter-spacing: calc(-0.224px * var(--ts)); color: var(--ink-48); display: flex; align-items: center; gap: var(--s-sm); }
 .ucard__t { font-size: calc(17px * var(--ts)); font-weight: 600; line-height: 1.24; letter-spacing: calc(-0.374px * var(--ts)); }
 .ucard__s { font-size: calc(14px * var(--ts)); letter-spacing: calc(-0.224px * var(--ts)); color: var(--ink-48); margin-top: var(--s-xxs); }
 .ucard__f { display: flex; align-items: center; gap: var(--s-md); margin-top: var(--s-sm); }
@@ -847,21 +847,22 @@ button.dt__row:active { transform: scale(0.98); }
  * iOS는 길게 누르면 텍스트 선택 메뉴(선택·복사·조회)를 먼저 띄우고 pointercancel을 보냅니다.
  * 그게 끌기가 켜지는 순간 드래그를 죽이므로, 카드에서는 처음부터 꺼둬야 합니다.
  * body에 클래스를 거는 방식은 420ms 뒤라서 늦습니다. */
-.lnk {
+.lnk, .lgroup {
   transition: box-shadow .16s, transform .12s, opacity .16s;
   -webkit-touch-callout: none;
   -webkit-user-select: none; user-select: none;
   touch-action: pan-y;                          /* 세로 스크롤은 살리고 가로 흔들림은 무시 */
 }
 .lnk a, .lnk button { -webkit-touch-callout: none; }
-.lnk.is-drag {
+.lnk.is-drag, .lgrpbox.is-drag {
   opacity: .95; transform: scale(1.02);
   box-shadow: 0 12px 30px rgba(0,0,0,.22);
   position: relative; z-index: 5;
 }
-.lnk.is-drag * { pointer-events: none; }        /* 끌던 중 링크가 열리지 않게 */
+.lgrpbox.is-drag { border-radius: var(--r-lg); background: var(--canvas); }
+.lnk.is-drag *, .lgrpbox.is-drag * { pointer-events: none; }   /* 끌던 중 링크가 열리지 않게 */
 body.lndrag { user-select: none; -webkit-user-select: none; }
-body.lndrag .lnk { touch-action: none; }
+body.lndrag .lnk, body.lndrag .lgroup { touch-action: none; }
 /* 순서 버튼 — 제스처가 안 먹는 상황에서도 확실히 바꿀 수 있는 길 */
 .lord { margin-left: auto; display: flex; gap: 2px; }
 .lord button {
@@ -1227,7 +1228,7 @@ var APP_VERSION = 'v7 · 즉시 저장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b29 · 자동 업데이트';
+var BUILD = 'b30 · 구분 순서 바꾸기';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -2190,8 +2191,15 @@ function renderLinks(){
     return;
   }
   var g={}; S.link.forEach(function(l){ (g[l.category||'기타']=g[l.category||'기타']||[]).push(l); });
-  box.innerHTML=secWrap('link', head, Object.keys(g).map(function(k){
-    return '<div class="lgroup">'+esc(k)+'</div><div class="stack" data-lgrp="'+esc(k)+'">'+g[k].map(function(l, i){
+  var keys=Object.keys(g);   // 구분의 순서 = S.link에 처음 나온 순서
+  box.innerHTML=secWrap('link', head, keys.map(function(k, gi){
+    return '<div class="lgrpbox" data-lgcat="'+esc(k)+'">'+
+      '<div class="lgroup"><span>'+esc(k)+'</span>'+
+      (keys.length>1 ? '<span class="lord">'+
+        '<button data-gmove="up" data-gcat="'+esc(k)+'" aria-label="구분 위로 옮기기"'+(gi===0?' disabled':'')+'>'+ico('up',17)+'</button>'+
+        '<button data-gmove="down" data-gcat="'+esc(k)+'" aria-label="구분 아래로 옮기기"'+(gi===keys.length-1?' disabled':'')+'>'+ico('down',17)+'</button>'+
+      '</span>' : '')+
+      '</div><div class="stack" data-lgrp="'+esc(k)+'">'+g[k].map(function(l, i){
       var u=safeUrl(l.url);
       return '<div class="card glass lnk" data-lid="'+esc(l.id)+'"><div class="ucard__t">'+esc(l.title)+'</div>'+
         (l.memo?'<div class="ucard__s">'+esc(l.memo)+'</div>':'')+
@@ -2202,24 +2210,26 @@ function renderLinks(){
           '<button data-lmove="down" data-lid="'+esc(l.id)+'" aria-label="아래로 옮기기"'+(i===g[k].length-1?' disabled':'')+'>'+ico('down',17)+'</button>'+
         '</span>' : '')+
         '</div></div>';
-    }).join('')+'</div>';
-  }).join('') + (S.link.length>1 ? '<div class="lhint">↑↓ 로 순서를 바꿉니다. 카드를 길게 눌러 끌어도 됩니다.</div>' : ''));
+    }).join('')+'</div></div>';
+  }).join('') + (S.link.length>1 ? '<div class="lhint">↑↓ 로 순서를 바꿉니다. 카드나 구분 이름을 길게 눌러 끌어도 됩니다.</div>' : ''));
   initLinkDrag();
 }
 
 /* ═══════════ 링크 순서 바꾸기 ═══════════
- * 카드를 꾹 눌렀다 끌어서 같은 구분 안에서 순서를 바꿉니다.
+ * 두 가지를 끕니다. 카드를 끌면 같은 구분 안에서, 구분 이름을 끌면
+ * 그 구분 전체(제목 + 카드 묶음)가 통째로 움직입니다.
  * iOS는 스크롤이 한 번 시작되면 취소할 수 없습니다. 그래서 길게 누르는 동안
  * 손가락이 움직이면 끌기를 포기하고 스크롤에 양보합니다.
  * 링크 시트에는 순서 열이 없습니다 — 행 순서가 곧 표시 순서라서
- * 서버의 reorderLinks가 id 순서대로 행을 다시 씁니다. */
+ * 서버의 reorderLinks가 id 순서대로 행을 다시 씁니다.
+ * 구분을 옮겨도 카드들이 통째로 따라가므로 같은 함수로 저장됩니다. */
 var lnDrag = null, lnBlockClick = false;
 
-function lnBefore(grp, y, me){
-  // y 위치 기준으로 어느 카드 앞에 넣을지 고릅니다. null이면 맨 뒤입니다.
+function lnBefore(container, sel, y, me){
+  // y 위치 기준으로 어느 형제 앞에 넣을지 고릅니다. null이면 맨 뒤입니다.
   var best=null, bestOff=-Infinity;
-  [].slice.call(grp.querySelectorAll('.lnk')).forEach(function(el){
-    if(el===me) return;
+  [].slice.call(container.children).forEach(function(el){
+    if(el===me || !el.matches(sel)) return;
     var r=el.getBoundingClientRect(), off=y-r.top-r.height/2;
     if(off<0 && off>bestOff){ bestOff=off; best=el; }
   });
@@ -2231,11 +2241,11 @@ function lnCommit(){
     .map(function(el){ return el.getAttribute('data-lid'); });
   if(!ids.length) return;
   var pos={}; ids.forEach(function(id,i){ pos[id]=i; });
-  // 화면과 같은 순서로 S.link도 맞춰둡니다(낙관적 반영). 다시 그리지 않으므로 깜빡임이 없습니다.
   S.link.sort(function(a,b){
     var x=pos[a.id], y=pos[b.id];
     return (x==null?9999:x)-(y==null?9999:y);
   });
+  renderLinks();        // ↑↓의 처음·끝 판정을 새 순서로 다시 계산해야 합니다
   saveCache(S);
   saveInBackground('reorderLinks', ids);
 }
@@ -2253,6 +2263,35 @@ function moveLink(id, dir){
 
   var a = idxs[at], b = idxs[to];
   var tmp = S.link[a]; S.link[a] = S.link[b]; S.link[b] = tmp;
+  renderLinks();
+  saveCache(S);
+  saveInBackground('reorderLinks', S.link.map(function(x){ return x.id; }));
+}
+
+/* 구분 통째로 옮기기. 구분에는 자기 순서를 적어둘 자리가 없으므로
+ * S.link를 새 구분 순서대로 다시 늘어놓습니다. 화면의 구분 순서는
+ * "S.link에 처음 나온 순서"라서 그것만으로 순서가 정해집니다. */
+function catOrder(){
+  var keys=[];
+  S.link.forEach(function(l){ var c=l.category||'기타'; if(keys.indexOf(c)<0) keys.push(c); });
+  return keys;
+}
+function applyCatOrder(keys){
+  var out=[];
+  keys.forEach(function(c){
+    S.link.forEach(function(l){ if((l.category||'기타')===c) out.push(l); });
+  });
+  if(out.length!==S.link.length) return false;   // 하나라도 흘리면 저장하지 않습니다
+  S.link=out;
+  return true;
+}
+function moveGroup(cat, dir){
+  var keys=catOrder();
+  var at=keys.indexOf(cat);
+  var to=at + (dir==='up' ? -1 : 1);
+  if(at<0 || to<0 || to>=keys.length) return;
+  keys.splice(to, 0, keys.splice(at, 1)[0]);
+  if(!applyCatOrder(keys)) return;
   renderLinks();
   saveCache(S);
   saveInBackground('reorderLinks', S.link.map(function(x){ return x.id; }));
@@ -2281,11 +2320,16 @@ function initLinkDrag(){
   box.addEventListener('pointerdown', function(e){
     if(e.button!=null && e.button!==0) return;
     if(!e.target.closest) return;
-    if(e.target.closest('a,button')) return;      // 열기·수정은 평소대로 눌리게
-    var card=e.target.closest('.lnk');
-    if(!card) return;
+    if(e.target.closest('a,button')) return;      // 열기·수정·↑↓는 평소대로 눌리게
+
+    // 구분 이름을 누르면 그 구분 전체를, 카드를 누르면 카드 하나를 끕니다.
+    var card, sel;
+    if(e.target.closest('.lgroup')){ card=e.target.closest('.lgrpbox'); sel='.lgrpbox'; }
+    else { card=e.target.closest('.lnk'); sel='.lnk'; }
+    if(!card || !card.parentNode) return;
+
     lnEnd(false);
-    var st={ card:card, on:false, x:e.clientX, y:e.clientY, pid:e.pointerId };
+    var st={ card:card, sel:sel, on:false, x:e.clientX, y:e.clientY, pid:e.pointerId };
     st.timer=setTimeout(function(){
       if(lnDrag!==st) return;
       st.on=true;
@@ -2306,8 +2350,9 @@ function initLinkDrag(){
       if(dx*dx+dy*dy>196) lnEnd(false);
       return;
     }
-    var grp=lnDrag.card.parentNode;        // 같은 구분(.stack) 안에서만 움직입니다
-    var ref=lnBefore(grp, e.clientY, lnDrag.card);
+    // 카드는 같은 구분(.stack) 안에서, 구분은 형제 구분들 사이에서만 움직입니다
+    var grp=lnDrag.card.parentNode;
+    var ref=lnBefore(grp, lnDrag.sel, e.clientY, lnDrag.card);
     if(ref!==lnDrag.card.nextSibling) grp.insertBefore(lnDrag.card, ref);
   });
 
@@ -2636,6 +2681,7 @@ function bind(){
     if(t.closest('#bkSave')) return saveBookRow();
     if(t.closest('#bkDel')) return del('deleteBooking',$('bkId').value,'이 예약','sBook');
     if((el=t.closest('[data-copy]'))) return copyText(el.dataset.copy);
+    if((el=t.closest('[data-gmove]'))) return moveGroup(el.dataset.gcat, el.dataset.gmove);
     if((el=t.closest('[data-lmove]'))) return moveLink(el.dataset.lid, el.dataset.lmove);
     if((el=t.closest('[data-elink]'))) return openLink(find(S.link,el.dataset.elink));
     if((el=t.closest('[data-pk]'))) return togglePack(el.dataset.pk);
