@@ -305,6 +305,11 @@ svg { display: block; flex: none; }
   display: grid; place-items: center; font-size: calc(12px * var(--ts)); font-weight: 600;
   box-shadow: 0 3px 10px rgba(0,0,0,.24);
 }
+/* 후보 핀 — 일정 핀과 섞이지 않게 번호 없이 작고 흐리게. 아직 정해진 자리가 아니라는 뜻입니다. */
+.pin--cand {
+  width: 18px; height: 18px; background: var(--canvas);
+  border: 2px dashed var(--ink-48); box-shadow: 0 2px 6px rgba(0,0,0,.18);
+}
 
 /* ── 칩: 탭바와 같은 문법 (트랙 하나 + 선택된 것만 알약) ── */
 .chiprow { padding: var(--s-sm) var(--s-sm) 0; }
@@ -773,6 +778,13 @@ button.dt__row:active { transform: scale(0.98); }
 .cnd .ucard__f { margin-top: 4px; gap: var(--s-md); }
 /* 버튼에 붙는 margin-top 12px가 줄 높이를 28 → 40으로 늘립니다 */
 .cnd .link.sm { min-height: 28px; padding: 4px 0; font-size: calc(14px * var(--ts)); margin: 0; }
+/* 빈 시간 제안 */
+.fitbox { margin-bottom: var(--s-md); }
+.fit__h { font-size: calc(13px * var(--ts)); font-weight: 600; color: var(--ink-48); margin-bottom: var(--s-xs); }
+.fit { background: rgba(0,102,204,.06); border-radius: 16px; padding: 10px var(--s-md); margin-bottom: var(--s-xs); }
+.fit__t { font-size: calc(15px * var(--ts)); font-weight: 600; letter-spacing: calc(-0.3px * var(--ts)); }
+.fit__s { font-size: calc(12px * var(--ts)); color: var(--ink-48); margin-top: 1px; }
+.fit .link.sm { min-height: 28px; padding: 4px 0; margin: 4px 0 0; font-size: calc(14px * var(--ts)); }
 .cnd__s { display: flex; align-items: center; gap: 5px; margin-top: 2px;
   font-size: calc(12px * var(--ts)); color: var(--ink-48); }
 
@@ -1315,7 +1327,7 @@ var APP_VERSION = 'v15 · 블로그 6곳';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b54 · 캐시 먼저';
+var BUILD = 'b55 · 후보 지도·빈시간';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -2488,7 +2500,7 @@ function renderCandidates(){
     return;
   }
 
-  box.innerHTML=('<div class="stack" style="padding:0">'+list.map(function(c){
+  box.innerHTML=(fitHtml()+'<div class="stack" style="padding:0">'+list.map(function(c){
     return '<div class="card glass cnd" data-cid="'+esc(c.id)+'">'+
       '<div class="ucard__t">'+esc(c.title)+'</div>'+
       '<div class="cnd__s">'+
@@ -2502,6 +2514,107 @@ function renderCandidates(){
         '<button class="link sm" data-cedit="'+esc(c.id)+'">수정</button>'+
       '</div></div>';
   }).join('')+'</div>');
+}
+
+/* ── 빈 시간에 후보 끼워넣기 ──
+ * AI를 부르지 않습니다. 좌표와 이동 시간 상수만으로 계산해서 즉시 나오고 한도도 안 씁니다.
+ * 숫자는 일정 검토와 같은 travelMin을 쓰므로 두 화면이 어긋나지 않습니다. */
+function stayMin(cat){
+  if(cat === '카페') return 40;
+  if(cat === '식당/맛집') return 60;
+  if(cat === '명소/관광') return 90;
+  if(cat === '쇼핑') return 60;
+  return 60;
+}
+function hhmm(m){
+  m = Math.max(0, Math.round(m));
+  return ('0'+Math.floor(m/60)%24).slice(-2) + ':' + ('0'+(m%60)).slice(-2);
+}
+var DAY_START = 9*60, DAY_END = 21*60;   // 이 밖은 자거나 쉬는 시간으로 봅니다
+var SAME_PLACE_KM = 0.3;                 // 이보다 가까우면 사실상 같은 자리입니다
+
+/* 앞 일정이 끝났을 법한 시각부터 다음 일정 시작까지를 '빈 시간'으로 봅니다.
+ * 시작 시각만 보고 재면 앞 일정이 진행 중인 시간까지 비어 있다고 착각합니다. */
+function planGaps(){
+  var byDay = {}, out = [];
+  (S.plan || []).forEach(function(p){ (byDay[p.day] = byDay[p.day] || []).push(p); });
+  Object.keys(byDay).forEach(function(d){
+    var list = byDay[d].slice().sort(byTime);
+    for(var i = 0; i < list.length - 1; i++){
+      var a = list[i], b = list[i+1];
+      var t1 = toMin(a.time), t2 = toMin(b.time);
+      if(t1 >= 9999 || t2 >= 9999) continue;
+      var aEnd = t1 + stayMin(a.cat);
+      if(t2 - aEnd < 60) continue;              // 한 시간도 안 남으면 넣을 자리가 아닙니다
+      /* 밤에서 아침으로 걸친 구간은 자는 시간입니다. 실제 데이터에서
+         'Day2 02:38~10:00 (442분)'을 빈 시간으로 잡은 적이 있습니다.
+         낮 시간대로 잘라내고, 그러고도 한 시간이 남을 때만 씁니다. */
+      var from = Math.max(aEnd, DAY_START), to = Math.min(t2, DAY_END);
+      if(to - from < 60) continue;
+      out.push({ day: d, after: a, before: b, from: from, to: to });
+    }
+  });
+  return out;
+}
+
+/* 각 후보가 들어갈 수 있는 자리 중 가장 가까운 한 곳씩. 최대 3개. */
+var fitList = [];
+function findFits(){
+  var gaps = planGaps();
+  var cands = candList().filter(function(c){ return okCoord(c.lat, c.lng); });
+  var best = {};
+  gaps.forEach(function(g){
+    var A = coordOf(g.after), B = coordOf(g.before);
+    if(!A || !B) return;
+    cands.forEach(function(c){
+      var C = [Number(c.lat), Number(c.lng)];
+      /* 앞뒤 일정과 거의 같은 자리면 제안할 이유가 없습니다.
+         '우에노 공원'을 '우에노 온시 공원' 옆(4분)에 넣으라고 한 적이 있습니다. */
+      if(distKm(A, C) < SAME_PLACE_KM || distKm(C, B) < SAME_PLACE_KM) return;
+      var go = travelMin(distKm(A, C)), back = travelMin(distKm(C, B));
+      /* 체류 시간을 정해놓고 '들어간다/안 들어간다'로 자르면 아무것도 안 남습니다.
+         실제 빈 시간이 60~90분인데 명소를 90분으로 잡으면 전부 탈락합니다.
+         대신 오가는 시간을 빼고 '실제로 머물 수 있는 시간'을 계산해 보여주고,
+         짧게 보고 나올지는 사용자가 정하게 합니다. */
+      var avail = (g.to - g.from) - go - back;
+      if(avail < 40) return;                            // 40분도 안 되면 갈 만하지 않습니다
+      var k = String(c.id);
+      if(best[k] && best[k].avail >= avail) return;     // 더 여유로운 자리가 이미 있습니다
+      best[k] = { cand: c, day: g.day, at: g.from + go, go: go, back: back, avail: avail,
+                  tight: avail < stayMin(c.cat), after: g.after.title };
+    });
+  });
+  return Object.keys(best).map(function(k){ return best[k]; })
+    .sort(function(a, b){ return (b.avail - a.avail) || (a.go - b.go); }).slice(0, 3);
+}
+
+function fitHtml(){
+  fitList = findFits();
+  if(!fitList.length) return '';
+  return '<div class="fitbox">' +
+    '<div class="fit__h">빈 시간에 넣기 좋은 곳</div>' +
+    fitList.map(function(f, i){
+      var d = dayDate(f.day);
+      return '<div class="fit">' +
+        '<div class="fit__t">' + esc(f.cand.title) + '</div>' +
+        '<div class="fit__s">Day ' + esc(f.day) + (d ? ' · ' + esc(fmtDs(d)) : '') +
+          ' · ' + hhmm(f.at) + ' 쯤</div>' +
+        '<div class="fit__s">' + esc(pinLabel(f.after)) + '에서 ' + f.go + '분 · ' +
+          '머물 수 있는 시간 <b>' + f.avail + '분</b> · 다음 일정까지 ' + f.back + '분' +
+          (f.tight ? ' · 짧게 보고 나와야 합니다' : '') + '</div>' +
+        '<button class="link sm" data-fit="' + i + '">여기에 넣기</button>' +
+      '</div>';
+    }).join('') + '</div>';
+}
+
+/* 제안한 자리 그대로 일정 시트를 채워 엽니다. 날짜·시간까지 미리 넣습니다. */
+function fitToPlan(i){
+  var f = fitList[i]; if(!f) return;
+  close_('sCandList');
+  openPlan({ title: f.cand.title, cat: f.cand.cat, memo: f.cand.memo,
+             lat: f.cand.lat, lng: f.cand.lng, day: String(f.day), time: hhmm(f.at) });
+  pFromCand = f.cand.id;                    // 저장되면 후보에서 지웁니다
+  $('planH').textContent = '빈 시간에 넣기';
 }
 
 /* 후보 목록은 시트로 엽니다. 일정 탭 화면을 밀어내지 않게. */
@@ -2848,6 +2961,18 @@ function updatePins(){
         {permanent:true, direction:'right', offset:[11,0], className:'pinlab'});
     });
   }
+  /* 후보도 같이 찍습니다. 어디쯤인지 눈으로 봐야 "이 근처니까 여기 넣자"가 됩니다.
+     일정 핀과 헷갈리지 않게 번호 없는 흐린 핀으로 두고,
+     지도 범위 계산(bounds)에는 넣지 않습니다 — 넣으면 엉뚱하게 축소됩니다. */
+  candList().forEach(function(c){
+    if(!okCoord(c.lat, c.lng)) return;
+    var mk=L.marker([Number(c.lat), Number(c.lng)], {icon:L.divIcon({
+      className:'', html:'<div class="pin pin--cand"></div>', iconSize:[18,18], iconAnchor:[9,9]
+    })}).addTo(lmap);
+    mk.bindPopup('<b>'+esc(c.title)+'</b><br>후보 여행지'+(c.addr?'<br>'+esc(c.addr):''));
+    marks.push(mk);
+  });
+
   if(bounds.length) lmap.fitBounds(bounds,{padding:[46,46]});
   $('mapNote').textContent = miss? '지도에 표시하지 못한 장소 '+miss+'곳' : '';
 }
@@ -3105,6 +3230,7 @@ function bind(){
     if(t.closest('#pFind')) return findPlanSpot();
     if(t.closest('#pSave')) return savePlan();
     if(t.closest('#bCand')) return openCandList();
+    if((el=t.closest('[data-fit]'))) return fitToPlan(+el.dataset.fit);
     if((el=t.closest('[data-cadd]'))) return candToPlan(el.dataset.cadd);
     if((el=t.closest('[data-cedit]'))) return openCand(find(candList(), el.dataset.cedit));
     if(t.closest('#ndAdd')) return openCand(null);
