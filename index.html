@@ -182,6 +182,20 @@ svg { display: block; flex: none; }
 }
 /* 상단바 안에서는 애플 권장 최소 터치 크기(44px)를 지킵니다 */
 .topbar .gbtn { width: 44px; height: 44px; }
+/* 왼쪽 알약. 오른쪽 것과 같은 규칙을 좌우만 뒤집습니다. */
+.topbar--l { right: auto; left: max(12px, calc(50% - var(--shell) / 2 + 12px)); }
+.tbtxt {
+  height: 44px; padding: 0 10px; border: 0; background: none; color: var(--ink);
+  display: flex; align-items: center; gap: 6px;
+  font-size: calc(15px * var(--ts)); font-weight: 600; letter-spacing: calc(-0.3px * var(--ts));
+}
+.tbn {
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--r-pill);
+  background: rgba(0,0,0,.07); color: var(--ink-48);
+  display: grid; place-items: center; font-size: calc(12px * var(--ts)); font-weight: 600;
+}
+.topbar.on-dark .tbtxt { color: #fff; }
+.topbar.on-dark .tbn { background: rgba(255,255,255,.2); color: #fff; }
 .gbtn:active { background: rgba(0,0,0,.05); }
 
 /* ── 버튼 ── */
@@ -936,6 +950,12 @@ body.lndrag .lnk, body.lndrag .lgroup { touch-action: none; }
 
 <div class="shell">
 
+  <!-- 왼쪽 알약: 일정 탭에서만 보입니다. 후보는 곁다리라 목록을 펼쳐두지 않고
+       눌렀을 때 시트로 엽니다. 일정 탭의 본론은 일정입니다. -->
+  <nav class="topbar topbar--l glass" id="tbCand" hidden>
+    <button class="tbtxt" id="bCand" aria-label="후보 목록">후보<span class="tbn" id="candN">0</span></button>
+  </nav>
+
   <nav class="topbar glass">
     <button class="gbtn" id="bAi" aria-label="여행 가이드"></button>
     <button class="gbtn" id="sCta" aria-label="추가"></button>
@@ -968,7 +988,6 @@ body.lndrag .lnk, body.lndrag .lgroup { touch-action: none; }
     <div class="map-note" id="mapNote"></div>
     <div class="chiprow"><div class="chips glass" id="chipDay"></div></div>
     <div class="chiprow" id="chipCatRow"><div class="chips glass" id="chipCat"></div></div>
-    <div id="candList"></div>
     <div id="timeline"></div>
   </section>
 
@@ -1027,7 +1046,16 @@ body.lndrag .lnk, body.lndrag .lgroup { touch-action: none; }
   </div>
 </div>
 
-<!-- 후보 -->
+<!-- 후보 목록 (sCand보다 앞에 둡니다. 뒤에 오는 편집 시트가 위로 겹치게) -->
+<div class="scrim" id="sCandList" hidden>
+  <div class="sheet glass-deep" role="dialog" aria-modal="true">
+    <div class="sheet__h"><h2>후보</h2><button class="gbtn" data-close="sCandList" aria-label="닫기"></button></div>
+    <div class="sheet__b"><div id="candList"></div></div>
+    <div class="sheet__f"><button class="btn-primary" id="ndAdd">후보 추가</button></div>
+  </div>
+</div>
+
+<!-- 후보 편집 -->
 <div class="scrim" id="sCand" hidden>
   <div class="sheet glass-deep" role="dialog" aria-modal="true">
     <div class="sheet__h"><h2 id="candH">후보 추가</h2><button class="gbtn" data-close="sCand" aria-label="닫기"></button></div>
@@ -1274,7 +1302,7 @@ var APP_VERSION = 'v7 · 즉시 저장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b37 · 후보 목록';
+var BUILD = 'b38 · 후보를 상단 시트로';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -1688,12 +1716,16 @@ function onScroll(){
   scrollTick=true;
   requestAnimationFrame(function(){
     scrollTick=false;
-    var bar=document.querySelector('.topbar');
+    // 알약이 둘(왼쪽 후보·오른쪽 도구)이라 하나만 집으면 나머지가 안 바뀝니다
+    var bars=document.querySelectorAll('.topbar');
     var hero=document.querySelector('#v-home.is-on .hero');
-    if(!bar) return;
-    if(!hero){ bar.classList.remove('on-dark'); return; }
-    var b=bar.getBoundingClientRect(), h=hero.getBoundingClientRect();
-    bar.classList.toggle('on-dark', h.bottom > b.top + b.height*0.45);
+    if(!bars.length) return;
+    if(!hero){ bars.forEach(function(b){ b.classList.remove('on-dark'); }); return; }
+    var h=hero.getBoundingClientRect();
+    bars.forEach(function(bar){
+      var b=bar.getBoundingClientRect();
+      bar.classList.toggle('on-dark', h.bottom > b.top + b.height*0.45);
+    });
   });
 }
 
@@ -2352,21 +2384,21 @@ function candMapUrl(c){
 }
 
 function renderCandidates(){
-  var box=$('candList'); if(!box) return;
   var list=candList();
-  var head=secHead('cand', '후보',
-    list.length ? '<span class="sechd__n">'+list.length+'</span>' : '', 'ndAdd');
+  // 상단 알약의 개수는 시트를 안 열어도 보입니다
+  var n=$('candN'); if(n) n.textContent=list.length;
+  var tb=$('tbCand'); if(tb) tb.hidden = (VIEW!=='plan');
 
+  var box=$('candList'); if(!box) return;
   if(!list.length){
-    box.innerHTML=secWrap('cand', head,
-      '<div class="stack"><div class="card glass"><div class="ucard__s">' +
+    box.innerHTML='<div class="ucard__s">' +
       '날짜를 정하기 전에 가보고 싶은 곳을 모아두는 곳입니다. ' +
       'AI에게 블로그 캡처를 보여주거나 "여기 어때?"라고 물으면 여기로 담아줍니다.' +
-      '</div></div></div>');
+      '</div>';
     return;
   }
 
-  box.innerHTML=secWrap('cand', head, '<div class="stack">'+list.map(function(c){
+  box.innerHTML=('<div class="stack" style="padding:0">'+list.map(function(c){
     return '<div class="card glass cnd" data-cid="'+esc(c.id)+'">'+
       '<div class="ucard__t">'+esc(c.title)+'</div>'+
       '<div class="cnd__s">'+
@@ -2381,6 +2413,9 @@ function renderCandidates(){
       '</div></div>';
   }).join('')+'</div>');
 }
+
+/* 후보 목록은 시트로 엽니다. 일정 탭 화면을 밀어내지 않게. */
+function openCandList(){ renderCandidates(); open_('sCandList'); }
 
 function openCand(c){
   busySave['cand']=false;
@@ -2439,6 +2474,7 @@ function saveCandRow(){
 var pFromCand=null;
 function candToPlan(id){
   var c=find(candList(), id); if(!c) return;
+  close_('sCandList');        // 일정 시트가 목록 시트 아래에 깔리지 않게 먼저 닫습니다
   openPlan({ title:c.title, cat:c.cat, memo:c.memo, lat:c.lat, lng:c.lng });
   pFromCand=id;                       // openPlan이 먼저 비우므로 그 뒤에 표시합니다
   $('planH').textContent='후보를 일정으로';
@@ -2723,6 +2759,7 @@ function go(v){
   ['home','plan','cost','link'].forEach(function(k){ $('v-'+k).classList.toggle('is-on',k===v); });
   document.querySelectorAll('.tabbar button').forEach(function(b){ b.classList.toggle('is-on',b.dataset.v===v); });
   setSubnav(); window.scrollTo(0,0); onScroll();
+  var tb=$('tbCand'); if(tb) tb.hidden = (v!=='plan');   // 후보 알약은 일정 탭에서만
   if(v==='plan') setTimeout(function(){ initMap(); updatePins(); },60);
 }
 
@@ -2962,6 +2999,7 @@ function bind(){
     if((el=t.closest('[data-ts]'))) return setScale(el.dataset.ts);
     if(t.closest('#pFind')) return findPlanSpot();
     if(t.closest('#pSave')) return savePlan();
+    if(t.closest('#bCand')) return openCandList();
     if((el=t.closest('[data-cadd]'))) return candToPlan(el.dataset.cadd);
     if((el=t.closest('[data-cedit]'))) return openCand(find(candList(), el.dataset.cedit));
     if(t.closest('#ndAdd')) return openCand(null);
