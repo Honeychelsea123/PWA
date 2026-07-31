@@ -785,6 +785,9 @@ button.dt__row:active { transform: scale(0.98); }
 .fit__t { font-size: calc(15px * var(--ts)); font-weight: 600; letter-spacing: calc(-0.3px * var(--ts)); }
 .fit__s { font-size: calc(12px * var(--ts)); color: var(--ink-48); margin-top: 1px; }
 .fit .link.sm { min-height: 28px; padding: 4px 0; margin: 4px 0 0; font-size: calc(14px * var(--ts)); }
+/* 삭제는 오른쪽 끝에 떼어놓습니다. 옆 버튼과 붙으면 잘못 누릅니다. */
+/* button.link-quiet(min-height 40px)를 이기려면 클래스 둘이 필요합니다 */
+.cnd .cnd__del { margin-left: auto; min-height: 28px; padding: 4px 0; font-size: calc(14px * var(--ts)); }
 .cnd__s { display: flex; align-items: center; gap: 5px; margin-top: 2px;
   font-size: calc(12px * var(--ts)); color: var(--ink-48); }
 
@@ -1327,7 +1330,7 @@ var APP_VERSION = 'v15 · 블로그 6곳';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b55 · 후보 지도·빈시간';
+var BUILD = 'b56 · 후보 카드에서 삭제';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -2512,6 +2515,9 @@ function renderCandidates(){
         '<button class="link sm" data-cadd="'+esc(c.id)+'">일정에 넣기</button>'+
         '<a class="link sm" href="'+esc(candMapUrl(c))+'" target="_blank" rel="noopener">지도</a>'+
         '<button class="link sm" data-cedit="'+esc(c.id)+'">수정</button>'+
+        /* 삭제는 오른쪽 끝에 떼어놓고 흐리게 둡니다.
+           '일정에 넣기' 옆에 붙으면 잘못 누르기 쉽습니다. 확인도 한 번 물어봅니다. */
+        '<button class="link-quiet cnd__del" data-cdel="'+esc(c.id)+'">삭제</button>'+
       '</div></div>';
   }).join('')+'</div>');
 }
@@ -3011,7 +3017,9 @@ function syncLock(){
 }
 function open_(id){ $(id).hidden = false; syncLock(); }
 function close_(id){
-  $(id).hidden = true;
+  // 닫을 시트가 없는 자리에서도 부릅니다(목록에서 바로 삭제하는 경우).
+  var el = id ? $(id) : null;
+  if(el) el.hidden = true;
   document.body.classList.remove('kb');
   syncLock();
 }
@@ -3233,6 +3241,10 @@ function bind(){
     if((el=t.closest('[data-fit]'))) return fitToPlan(+el.dataset.fit);
     if((el=t.closest('[data-cadd]'))) return candToPlan(el.dataset.cadd);
     if((el=t.closest('[data-cedit]'))) return openCand(find(candList(), el.dataset.cedit));
+    if((el=t.closest('[data-cdel]'))){
+      var cd=find(candList(), el.dataset.cdel);
+      return del('deleteCandidate', el.dataset.cdel, cd ? cd.title : '이 후보 여행지', null);
+    }
     if(t.closest('#ndAdd')) return openCand(null);
     if(t.closest('#ndAi')) return askCandAi();
     if(t.closest('#ndFind')) return findCandSpot();
