@@ -843,6 +843,17 @@ button.dt__row:active { transform: scale(0.98); }
 .sechd__b[aria-expanded="false"] .sechd__c { transform: rotate(0deg); }
 .sec.is-folded > .secbody { display: none; }
 
+/* 링크 순서 바꾸기 — 꾹 눌러 끌기 */
+.lnk { transition: box-shadow .16s, transform .12s, opacity .16s; }
+.lnk.is-drag {
+  opacity: .95; transform: scale(1.02);
+  box-shadow: 0 12px 30px rgba(0,0,0,.22);
+  position: relative; z-index: 5;
+}
+.lnk.is-drag * { pointer-events: none; }        /* 끌던 중 링크가 열리지 않게 */
+body.lndrag { user-select: none; -webkit-user-select: none; }
+.lhint { margin: 10px 2px 0; font-size: calc(12px * var(--ts)); color: var(--ink-48); }
+
 .pbar { height: 5px; border-radius: var(--r-pill); background: rgba(0,0,0,.07); margin: 0 var(--s-lg) var(--s-xs); overflow: hidden; }
 .pbar i { display: block; height: 100%; border-radius: var(--r-pill); background: var(--primary); transition: width .3s; }
 
@@ -1007,7 +1018,7 @@ button.dt__row:active { transform: scale(0.98); }
     <div class="sheet__h"><h2 id="linkH">링크 추가</h2><button class="gbtn" data-close="sLink" aria-label="닫기"></button></div>
     <div class="sheet__b">
       <input type="hidden" id="lId">
-      <div class="f"><label for="lCat">구분</label><select id="lCat"><option>맛집/검색</option><option>교통/지도</option><option>준비물</option><option>기타</option></select></div>
+      <div class="f"><label for="lCat">구분</label><select id="lCat"><option>맛집/검색</option><option>쇼핑</option><option>교통/지도</option><option>준비물</option><option>기타</option></select></div>
       <div class="f"><label for="lTitle">제목</label><input type="text" id="lTitle" placeholder="타베로그"></div>
       <div class="f"><label for="lUrl">주소</label><input type="url" id="lUrl" placeholder="https://"></div>
       <div class="f"><label for="lMemo">설명</label><input type="text" id="lMemo"></div>
@@ -1197,7 +1208,7 @@ var APP_VERSION = 'v7 · 즉시 저장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b26 · 준비물 순서·접기';
+var BUILD = 'b27 · 쇼핑 구분·링크 순서';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -2161,14 +2172,116 @@ function renderLinks(){
   }
   var g={}; S.link.forEach(function(l){ (g[l.category||'기타']=g[l.category||'기타']||[]).push(l); });
   box.innerHTML=secWrap('link', head, Object.keys(g).map(function(k){
-    return '<div class="lgroup">'+esc(k)+'</div><div class="stack">'+g[k].map(function(l){
+    return '<div class="lgroup">'+esc(k)+'</div><div class="stack" data-lgrp="'+esc(k)+'">'+g[k].map(function(l){
       var u=safeUrl(l.url);
-      return '<div class="card glass"><div class="ucard__t">'+esc(l.title)+'</div>'+
+      return '<div class="card glass lnk" data-lid="'+esc(l.id)+'"><div class="ucard__t">'+esc(l.title)+'</div>'+
         (l.memo?'<div class="ucard__s">'+esc(l.memo)+'</div>':'')+
         '<div class="ucard__f">'+(u?'<a class="link sm" href="'+esc(u)+'" target="_blank" rel="noopener">열기</a>':'')+
         '<button class="link sm" data-elink="'+esc(l.id)+'">수정</button></div></div>';
     }).join('')+'</div>';
-  }).join(''));
+  }).join('') + (S.link.length>1 ? '<div class="lhint">카드를 길게 눌러 순서를 바꿀 수 있습니다</div>' : ''));
+  initLinkDrag();
+}
+
+/* ═══════════ 링크 순서 바꾸기 ═══════════
+ * 카드를 꾹 눌렀다 끌어서 같은 구분 안에서 순서를 바꿉니다.
+ * iOS는 스크롤이 한 번 시작되면 취소할 수 없습니다. 그래서 길게 누르는 동안
+ * 손가락이 움직이면 끌기를 포기하고 스크롤에 양보합니다.
+ * 링크 시트에는 순서 열이 없습니다 — 행 순서가 곧 표시 순서라서
+ * 서버의 reorderLinks가 id 순서대로 행을 다시 씁니다. */
+var lnDrag = null, lnBlockClick = false;
+
+function lnBefore(grp, y, me){
+  // y 위치 기준으로 어느 카드 앞에 넣을지 고릅니다. null이면 맨 뒤입니다.
+  var best=null, bestOff=-Infinity;
+  [].slice.call(grp.querySelectorAll('.lnk')).forEach(function(el){
+    if(el===me) return;
+    var r=el.getBoundingClientRect(), off=y-r.top-r.height/2;
+    if(off<0 && off>bestOff){ bestOff=off; best=el; }
+  });
+  return best;
+}
+
+function lnCommit(){
+  var ids=[].slice.call(document.querySelectorAll('#linkList .lnk'))
+    .map(function(el){ return el.getAttribute('data-lid'); });
+  if(!ids.length) return;
+  var pos={}; ids.forEach(function(id,i){ pos[id]=i; });
+  // 화면과 같은 순서로 S.link도 맞춰둡니다(낙관적 반영). 다시 그리지 않으므로 깜빡임이 없습니다.
+  S.link.sort(function(a,b){
+    var x=pos[a.id], y=pos[b.id];
+    return (x==null?9999:x)-(y==null?9999:y);
+  });
+  saveCache(S);
+  saveInBackground('reorderLinks', ids);
+}
+
+function lnEnd(commit){
+  if(!lnDrag) return;
+  clearTimeout(lnDrag.timer);
+  var was=lnDrag.on, card=lnDrag.card;
+  lnDrag=null;
+  if(card) card.classList.remove('is-drag');
+  document.body.classList.remove('lndrag');
+  if(was){
+    // 손을 뗀 뒤 따라오는 click 한 번을 삼킵니다. 안 그러면 '수정'이 열립니다.
+    lnBlockClick=true;
+    setTimeout(function(){ lnBlockClick=false; }, 350);
+  }
+  if(was && commit) lnCommit();
+}
+
+function initLinkDrag(){
+  var box=$('linkList');
+  if(!box || box.__dragInit) return;
+  box.__dragInit=true;   // 컨테이너는 다시 그려도 그대로라 한 번만 붙이면 됩니다
+
+  box.addEventListener('pointerdown', function(e){
+    if(e.button!=null && e.button!==0) return;
+    if(!e.target.closest) return;
+    if(e.target.closest('a,button')) return;      // 열기·수정은 평소대로 눌리게
+    var card=e.target.closest('.lnk');
+    if(!card) return;
+    lnEnd(false);
+    var st={ card:card, on:false, x:e.clientX, y:e.clientY, pid:e.pointerId };
+    st.timer=setTimeout(function(){
+      if(lnDrag!==st) return;
+      st.on=true;
+      card.classList.add('is-drag');
+      document.body.classList.add('lndrag');
+      try { card.setPointerCapture(st.pid); } catch(err){}
+      if(navigator.vibrate) try { navigator.vibrate(12); } catch(err){}
+    }, 420);
+    lnDrag=st;
+  });
+
+  box.addEventListener('pointermove', function(e){
+    if(!lnDrag) return;
+    if(!lnDrag.on){
+      // 아직 켜지기 전에 움직였다 = 스크롤하려는 것입니다. 끌기를 포기합니다.
+      var dx=e.clientX-lnDrag.x, dy=e.clientY-lnDrag.y;
+      if(dx*dx+dy*dy>100) lnEnd(false);
+      return;
+    }
+    var grp=lnDrag.card.parentNode;        // 같은 구분(.stack) 안에서만 움직입니다
+    var ref=lnBefore(grp, e.clientY, lnDrag.card);
+    if(ref!==lnDrag.card.nextSibling) grp.insertBefore(lnDrag.card, ref);
+  });
+
+  box.addEventListener('pointerup', function(){ lnEnd(true); });
+  box.addEventListener('pointercancel', function(){ lnEnd(false); });
+
+  box.addEventListener('click', function(e){
+    if(!lnBlockClick) return;
+    lnBlockClick=false;
+    e.stopPropagation(); e.preventDefault();
+  }, true);
+
+  // 끌기 중에는 화면이 같이 스크롤되지 않게 막습니다.
+  // passive:false 여야 preventDefault가 먹힙니다.
+  box.addEventListener('touchmove', function(e){
+    if(lnDrag && lnDrag.on) e.preventDefault();
+  }, { passive:false });
 }
 
 /* ═══════════ 선택지 ═══════════ */
