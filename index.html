@@ -463,6 +463,8 @@ svg { display: block; flex: none; }
 .sheet__b { padding: var(--s-md) var(--s-lg); overflow-y: auto; display: grid; gap: var(--s-md); }
 .sheet__f { display: flex; align-items: center; gap: var(--s-sm); padding: var(--s-sm) var(--s-lg) var(--s-lg); border-top: 0.5px solid rgba(0,0,0,.07); }
 .sheet__f .btn-primary { flex: 1; }
+/* 둘 중 덜 중요한 쪽. 파랑 두 개가 나란히 있으면 무엇을 누를지 헷갈립니다. */
+.btn-primary.btn-ghost { background: rgba(0,0,0,.05); color: var(--primary); box-shadow: none; }
 
 .f label { display: block; font-size: calc(14px * var(--ts)); font-weight: 600; letter-spacing: calc(-0.224px * var(--ts)); color: var(--ink-80); margin-bottom: var(--s-xs); }
 .f input, .f select, .f textarea {
@@ -1059,7 +1061,10 @@ body.lndrag .lnk, body.lndrag .lgroup { touch-action: none; }
   <div class="sheet glass-deep" role="dialog" aria-modal="true">
     <div class="sheet__h"><h2>후보 여행지</h2><button class="gbtn" data-close="sCandList" aria-label="닫기"></button></div>
     <div class="sheet__b"><div id="candList"></div></div>
-    <div class="sheet__f"><button class="btn-primary" id="ndAdd">후보 여행지 추천</button></div>
+    <div class="sheet__f">
+      <button class="btn-primary btn-ghost" id="ndAdd">직접 추가</button>
+      <button class="btn-primary" id="ndAi">AI 추천</button>
+    </div>
   </div>
 </div>
 
@@ -1310,7 +1315,7 @@ var APP_VERSION = 'v7 · 즉시 저장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b39 · 후보 여행지·카드 축소';
+var BUILD = 'b40 · 직접 추가·AI 추천';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -2425,6 +2430,19 @@ function renderCandidates(){
 /* 후보 목록은 시트로 엽니다. 일정 탭 화면을 밀어내지 않게. */
 function openCandList(){ renderCandidates(); open_('sCandList'); }
 
+/* AI 추천 — 목록을 닫고 대화창에서 물어봅니다.
+ * 이미 담긴 곳을 적어 보내야 같은 곳을 또 추천하지 않습니다.
+ * 서버는 날짜 없는 장소를 candidate 액션으로 내주므로 '담기' 카드로 바로 붙습니다. */
+function askCandAi(){
+  var have=candList().map(function(c){ return c.title; });
+  close_('sCandList');
+  openChat();
+  var q='가볼 만한 곳을 3곳 후보 여행지로 추천해줘. 날짜는 아직 안 정할 거야.\n' +
+        '이미 일정에 있는 곳은 빼줘.' +
+        (have.length ? ' 후보에 이미 담은 것도 빼줘: ' + have.join(', ') : '');
+  sendAi(q);
+}
+
 function openCand(c){
   busySave['cand']=false;
   c=c||{};
@@ -3011,6 +3029,7 @@ function bind(){
     if((el=t.closest('[data-cadd]'))) return candToPlan(el.dataset.cadd);
     if((el=t.closest('[data-cedit]'))) return openCand(find(candList(), el.dataset.cedit));
     if(t.closest('#ndAdd')) return openCand(null);
+    if(t.closest('#ndAi')) return askCandAi();
     if(t.closest('#ndFind')) return findCandSpot();
     if(t.closest('#ndSave')) return saveCandRow();
     if(t.closest('#ndDel')) return del('deleteCandidate',$('ndId').value,'이 후보','sCand');
