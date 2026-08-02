@@ -339,6 +339,9 @@ svg { display: block; flex: none; }
 
 /* ── 타임라인 ── */
 .dayhead { padding: var(--s-lg) var(--s-lg) var(--s-xs); font-size: calc(14px * var(--ts)); font-weight: 600; letter-spacing: calc(-0.224px * var(--ts)); color: var(--ink-48); }
+/* 하루 요약 — 날짜 옆에 붙습니다. 이동이 많은 날은 '빡셈'이 뜹니다. */
+.daystat { font-weight: 400; font-size: calc(12px * var(--ts)); margin-left: 6px; }
+.daystat b { color: var(--k-food); font-weight: 600; }
 .tlcard { border-radius: var(--r-lg); overflow: hidden; }
 .ev { border-top: 0.5px solid rgba(0,0,0,.07); }
 .ev:first-child { border-top: none; }
@@ -1332,11 +1335,11 @@ function kc(name){ return KC[name] || 'var(--k-etc)'; }
 /* ═══════════ 상태 ═══════════ */
 var S = { trip:{}, plan:[], expense:[], link:[], categories:[], revision:-1 };
 var VIEW='home', fDay='ALL', fCat='ALL', lmap=null, marks=[], route=null, rate=9.0, syncOk=true;
-var APP_VERSION = 'v17 · 좌표 보존';
+var APP_VERSION = 'v18 · 시각 묶음·id 보호';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b59 · v17 맞춤';
+var BUILD = 'b60 · 순서 바꾸기·하루 요약';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -2246,7 +2249,8 @@ function renderTimeline(){
       last=String(p.day);
       var d=dayDate(p.day);
       if(last!==null) h+='</div></div>';
-      h+='<div class="dayhead">Day '+esc(p.day)+(d?' · '+esc(fmtD(d)):'')+'</div><div class="stack" style="padding-top:0"><div class="tlcard glass">';
+      h+='<div class="dayhead">Day '+esc(p.day)+(d?' · '+esc(fmtD(d)):'')+
+         dayStatHtml(p.day)+'</div><div class="stack" style="padding-top:0"><div class="tlcard glass">';
     }
     var isNow=(+p.day===td)&&toMin(p.time)<=nowM&&
       (i+1>=list.length||+list[i+1].day!==td||toMin(list[i+1].time)>nowM);
@@ -2255,6 +2259,78 @@ function renderTimeline(){
   if(last!==null) h+='</div></div>';
   box.innerHTML=h;
 }
+/* ── 하루가 얼마나 빡센지 ──
+ * 좌표가 다 있으니 이동 시간과 거리를 그대로 잴 수 있습니다. AI를 안 씁니다.
+ * 32건을 눈으로 훑지 않아도 '이 날은 이동에만 2시간'이 보입니다. */
+function dayStat(dn){
+  var list=(S.plan||[]).filter(function(p){ return String(p.day)===String(dn); }).sort(byTime);
+  var min=0, km=0, legs=0;
+  for(var i=0;i<list.length-1;i++){
+    var a=coordOf(list[i]), b=coordOf(list[i+1]);
+    if(!a || !b) continue;
+    var d=distKm(a,b);
+    if(d < 0.15) continue;              // 사실상 같은 자리
+    km += d; min += travelMin(d); legs++;
+  }
+  return { n:list.length, min:Math.round(min), km:km, legs:legs };
+}
+function dayStatHtml(dn){
+  var s=dayStat(dn);
+  if(!s.n) return '';
+  var t = s.min>=60 ? (Math.floor(s.min/60)+'시간'+(s.min%60 ? ' '+(s.min%60)+'분' : '')) : (s.min+'분');
+  return '<span class="daystat">'+s.n+'곳'+
+    (s.legs ? ' · 이동 '+t+' · '+s.km.toFixed(1)+'km' : '')+
+    (s.min>=150 ? ' <b>빡셈</b>' : '')+'</span>';
+}
+
+/* ── 순서 바꾸기 ──
+ * 옆 항목과 시각을 맞바꿉니다. 그것만 바꿉니다.
+ *
+ * 처음에는 하루 전체를 다시 계산했는데(이동+체류를 더해가며 뒤로 밀기),
+ * 두 항목 자리만 바꿨는데 '22:00 호텔 복귀'가 19:50으로 당겨졌습니다.
+ * 저녁 시각처럼 일부러 맞춰둔 것까지 무너집니다.
+ * 자리만 바꾸는 게 사용자가 기대하는 동작이고, 되돌리기도 반대 화살표 한 번입니다.
+ *
+ * 대신 바뀐 자리에서 이동이 빠듯해지면 알려줍니다. 숫자를 숨기지 않습니다. */
+function movePlan(id, dir){
+  var me = find(S.plan, id); if(!me) return;
+  var list = (S.plan||[]).filter(function(p){ return String(p.day)===String(me.day); }).sort(byTime);
+  var at = list.map(function(p){ return String(p.id); }).indexOf(String(id));
+  var to = at + (dir==='up' ? -1 : 1);
+  if(at < 0 || to < 0 || to >= list.length){
+    return toast(dir==='up' ? '이미 그날 처음입니다' : '이미 그날 마지막입니다');
+  }
+
+  var A = list[at], B = list[to];
+  if(!/^\d{2}:\d{2}$/.test(A.time||'') || !/^\d{2}:\d{2}$/.test(B.time||'')){
+    return toast('시각이 없는 일정은 순서를 바꿀 수 없습니다');
+  }
+  var ta = A.time, tb = B.time;
+
+  // 화면 먼저
+  A.time = tb; B.time = ta;
+  renderAllPlan();
+
+  api('saveTimes', [{ id:A.id, time:tb }, { id:B.id, time:ta }])
+    .then(function(d){
+      var c=S.chat; apply(d); S.chat=c;
+      // 바뀐 순서에서 이동이 빠듯한지 확인해 알려줍니다
+      var after=(S.plan||[]).filter(function(p){ return String(p.day)===String(me.day); }).sort(byTime);
+      var warn=null;
+      for(var i=0;i<after.length-1;i++){
+        var h=moveHint(after[i], after[i+1]);
+        if(!h) continue;
+        var gap=toMin(after[i+1].time)-toMin(after[i].time);
+        if(gap < h.min){ warn = after[i].title+' → '+after[i+1].title+' 이동에 '+h.min+'분 필요한데 '+gap+'분뿐입니다'; break; }
+      }
+      toast(warn || '순서를 바꿨습니다');
+    })
+    .catch(function(e){
+      A.time=ta; B.time=tb; renderAllPlan();     // 실패하면 되돌립니다
+      toast('저장 실패: '+(e.message||e));
+    });
+}
+
 function evHtml(p,isNow){
   var mm=parseMemo(p.memo), q=encodeURIComponent(p.title||'');
   var sub=[]; if(p.cat) sub.push(esc(p.cat));
@@ -2267,6 +2343,8 @@ function evHtml(p,isNow){
   det+='<div class="dacts">'+
     '<a class="link sm" href="https://www.google.com/maps/search/?api=1&query='+q+'" target="_blank" rel="noopener">지도에서 보기</a>'+
     '<a class="link sm" href="https://www.google.com/maps/dir/?api=1&destination='+q+'&travelmode=transit" target="_blank" rel="noopener">길찾기</a>'+
+    '<button class="link sm" data-mv="up|'+esc(p.id)+'">앞으로</button>'+
+    '<button class="link sm" data-mv="dn|'+esc(p.id)+'">뒤로</button>'+
     '<button class="link sm" data-edit="'+esc(p.id)+'">수정</button>'+
     '<button class="link-quiet" style="margin-left:auto" data-del="'+esc(p.id)+'">삭제</button></div>';
 
@@ -3234,6 +3312,11 @@ function bind(){
     if((el=t.closest('[data-f]'))){
       if(el.dataset.f==='day') fDay=el.dataset.v; else fCat=el.dataset.v;
       buildChips(); renderTimeline(); updatePins(); return;
+    }
+    if((el=t.closest('[data-mv]'))){
+      ev.stopPropagation();                       // 항목이 접히지 않게
+      var mv=el.dataset.mv.split('|');
+      return movePlan(mv[1], mv[0]==='up' ? 'up' : 'dn');
     }
     if((el=t.closest('[data-edit]'))){ ev.stopPropagation(); return openPlan(find(S.plan,el.dataset.edit)); }
     if((el=t.closest('[data-del]'))){ ev.stopPropagation(); return del('deleteSchedule',el.dataset.del,'이 일정','sPlan'); }
