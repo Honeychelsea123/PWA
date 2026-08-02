@@ -1297,7 +1297,7 @@ body.lndrag .lnk, body.lndrag .lgroup { touch-action: none; }
       </div>
       <div class="f">
         <label>버전</label>
-        <div class="sample"><div class="sample__t" id="verApp" style="white-space:pre-line">화면 —</div><div class="sample__s" id="verSrv">서버 —</div></div>
+        <div class="sample"><div class="sample__t" id="verApp">화면 —</div><div class="sample__s" id="verSrv">서버 —</div></div>
       </div>
     </div>
     <div class="sheet__f"><button class="btn-primary" id="setDone">완료</button></div>
@@ -1353,7 +1353,7 @@ var APP_VERSION = 'v20 · 사진 여러 장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b66 · 사진 여러 장';
+var BUILD = 'b67 · 부팅시간 숨김';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -1799,7 +1799,8 @@ function apply(d){
   applyScale(S.trip.textScale);
   var sv = S.version || '(구버전 — Code.gs를 새로 배포하세요)';
   $('aiUse').textContent = (S.aiCalls || 0) + '회 / 1,500회';
-  $('verApp').textContent = '화면  ' + APP_VERSION + '   ' + BUILD + '\n부팅  ' + tmarkText();
+  // 부팅 시각은 화면에 띄우지 않습니다. 필요하면 콘솔에서 tmarkText()로 봅니다.
+  $('verApp').textContent = '화면  ' + APP_VERSION + '   ' + BUILD;
   $('verSrv').textContent = '서버  ' + sv + (sv === APP_VERSION ? '' : '   ← 화면과 다릅니다');
   renderHero(); renderFacts(); renderToday(); renderNow(); renderBookings(); renderDays();
   buildChips(); renderTimeline(); renderCandidates(); renderCost(); renderPack(); renderLinks();
