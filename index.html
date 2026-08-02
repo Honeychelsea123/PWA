@@ -772,7 +772,10 @@ button.dt__row:active { transform: scale(0.98); }
 
 
 /* ── 사진 첨부 ── */
-.shot { position: relative; margin: 0 var(--s-lg) var(--s-xs); align-self: flex-start; }
+/* 담아둔 사진들 — 여러 장이면 가로로 넘겨 봅니다 */
+.shot { margin: 0 var(--s-lg) var(--s-xs); align-self: stretch;
+  display: flex; gap: var(--s-xs); overflow-x: auto; padding: 6px 0; }
+.shot__i { position: relative; flex: none; }
 .shot img { height: 74px; border-radius: var(--r-md); display: block; border: 0.5px solid rgba(255,255,255,.8); }
 .shot__x {
   position: absolute; top: -6px; right: -6px;
@@ -780,7 +783,11 @@ button.dt__row:active { transform: scale(0.98); }
   background: var(--ink); color: #fff; font-size: 12px; line-height: 1;
   display: grid; place-items: center;
 }
-.bub img.sent { max-width: 190px; border-radius: var(--r-md); display: block; margin-bottom: 7px; }
+/* 보낸 사진. 여러 장이면 나란히 놓고 좁으면 접힙니다. */
+.bub img.sent { max-width: 190px; border-radius: var(--r-md); display: inline-block;
+  margin: 0 5px 7px 0; vertical-align: top; }
+.bub img.sent:only-of-type { display: block; margin-right: 0; }
+.bub img.sent:not(:only-of-type) { max-width: 92px; }
 .act__amt { font-size: calc(17px * var(--ts)); font-weight: 700; letter-spacing: calc(-0.35px * var(--ts)); }
 .act__tag.t-exp { background: rgba(182,87,36,.14); color: var(--k-food); }
 .act__tag.t-cand { background: rgba(52,120,86,.14); color: var(--k-see); }
@@ -1176,9 +1183,9 @@ body.lndrag .lnk, body.lndrag .lgroup { touch-action: none; }
       <button class="gbtn" data-close="sAi" aria-label="닫기"></button>
     </div>
     <div class="chat" id="chat"></div>
-    <div class="shot" id="shot" hidden><img id="shotImg" alt=""><button class="shot__x" id="shotX" aria-label="사진 빼기">✕</button></div>
+    <div class="shot" id="shot" hidden></div>
     <div class="chat__f">
-      <input type="file" id="aiFile" accept="image/*" hidden>
+      <input type="file" id="aiFile" accept="image/*" multiple hidden>
       <button class="gbtn" id="aiCam" aria-label="사진 첨부"></button>
       <button class="gbtn" id="aiLoc" aria-label="내 위치 함께 보내기"></button>
       <input type="text" id="aiIn" placeholder="무엇이든 물어보세요">
@@ -1342,11 +1349,11 @@ function kc(name){ return KC[name] || 'var(--k-etc)'; }
 /* ═══════════ 상태 ═══════════ */
 var S = { trip:{}, plan:[], expense:[], link:[], categories:[], revision:-1 };
 var VIEW='home', fDay='ALL', fCat='ALL', lmap=null, marks=[], route=null, rate=9.0, syncOk=true;
-var APP_VERSION = 'v19 · 예약 메일 읽기';
+var APP_VERSION = 'v20 · 사진 여러 장';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b65 · 파랑 복귀';
+var BUILD = 'b66 · 사진 여러 장';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -3422,7 +3429,7 @@ function bind(){
     if(t.closest('#aiSend')) return sendAi();
     if(t.closest('#aiLoc')) return toggleLoc();
     if(t.closest('#aiCam')) return $('aiFile').click();
-    if(t.closest('#shotX')) return clearShot();
+    if((el=t.closest('[data-shotx]'))) return dropShot(+el.dataset.shotx);
     if(t.closest('#aiReview')) return runReview();
     if(t.closest('#aiClear')) return wipeChat();
     if((el=t.closest('[data-q]'))){
@@ -3453,7 +3460,7 @@ function bind(){
     }
   });
   $('aiIn').addEventListener('keypress',function(e){ if(e.key==='Enter') sendAi(); });
-  $('aiFile').addEventListener('change',function(e){ pickShot(e.target.files[0]); e.target.value=''; });
+  $('aiFile').addEventListener('change',function(e){ pickShots(e.target.files); e.target.value=''; });
   document.addEventListener('keydown',function(e){
     if(e.key==='Escape') document.querySelectorAll('.scrim').forEach(function(s){ if(!s.hidden) close_(s.id); });
   });
@@ -3462,7 +3469,7 @@ function bind(){
 /* ═══════════ AI 여행 비서 ═══════════ */
 var pending = {};          // 아직 적용하지 않은 제안
 var useLoc = false, myPos = null;
-var shotData = null;      // { mime, data(base64), url }
+var shotData = [];        // [{ mime, data(base64), url }] — 여러 장
 var chatReady = false;
 
 var QUICK = ['일정 검토', '오늘 일정 정리', '빈 시간 찾기', '예산 확인', '근처 맛집'];
@@ -3514,23 +3521,56 @@ function shrink(file, maxPx, quality){
   });
 }
 
-function pickShot(file){
-  if(!file) return;
-  if(!/^image\//.test(file.type)) return toast('이미지 파일만 됩니다');
-  toast('사진 준비 중…');
-  shrink(file, 1280, 0.82).then(function(dataUrl){
-    shotData = { mime:'image/jpeg', data: dataUrl.split(',')[1], url: dataUrl };
-    $('shotImg').src = dataUrl;
-    $('shot').hidden = false;
-    if(!$('aiIn').value) $('aiIn').placeholder = '사진에 대해 물어보세요 (그냥 보내도 됩니다)';
-    scrollChat();
-  }).catch(function(){ toast('사진을 읽지 못했습니다'); });
+/* 여러 장을 받습니다. 블로그 캡처는 보통 연달아 여러 장이라 한 장씩 보내면 번거롭고,
+ * AI 호출도 장수만큼 늘어납니다. 한 번에 보내면 호출은 한 번입니다.
+ * 요청이 너무 커지지 않게 6장에서 끊습니다(서버도 같은 수로 막습니다). */
+var MAX_SHOTS = 6;
+
+function pickShots(files){
+  var list=[].slice.call(files||[]).filter(function(f){ return /^image\//.test(f.type); });
+  if(!list.length) return toast('이미지 파일만 됩니다');
+
+  var room = MAX_SHOTS - shotData.length;
+  if(room <= 0) return toast('사진은 '+MAX_SHOTS+'장까지입니다');
+  var over = list.length - room;
+  list = list.slice(0, room);
+
+  toast(list.length>1 ? ('사진 '+list.length+'장 준비 중…') : '사진 준비 중…');
+  // 한 장씩 순서대로 줄입니다. 한꺼번에 하면 폰에서 메모리가 튑니다.
+  list.reduce(function(chain, f){
+    return chain.then(function(){
+      return shrink(f, 1280, 0.82).then(function(dataUrl){
+        shotData.push({ mime:'image/jpeg', data: dataUrl.split(',')[1], url: dataUrl });
+        renderShots();
+      });
+    });
+  }, Promise.resolve())
+  .then(function(){ if(over>0) toast(MAX_SHOTS+'장까지만 담았습니다'); })
+  .catch(function(){ toast('사진을 읽지 못했습니다'); });
 }
 
-function clearShot(){
-  shotData=null; $('shot').hidden=true; $('shotImg').src='';
-  $('aiIn').placeholder='긴자 하치고 오늘 영업해?';
+function renderShots(){
+  var box=$('shot');
+  if(!shotData.length){
+    box.hidden=true; box.innerHTML='';
+    $('aiIn').placeholder='긴자 하치고 오늘 영업해?';
+    return;
+  }
+  box.hidden=false;
+  box.innerHTML = shotData.map(function(s, i){
+    return '<span class="shot__i"><img src="'+s.url+'" alt="">' +
+           '<button class="shot__x" data-shotx="'+i+'" aria-label="사진 빼기">✕</button></span>';
+  }).join('');
+  if(!$('aiIn').value){
+    $('aiIn').placeholder = shotData.length>1
+      ? '사진 '+shotData.length+'장에 대해 물어보세요 (그냥 보내도 됩니다)'
+      : '사진에 대해 물어보세요 (그냥 보내도 됩니다)';
+  }
+  scrollChat();
 }
+
+function dropShot(i){ shotData.splice(i,1); renderShots(); }
+function clearShot(){ shotData=[]; renderShots(); }
 
 /** 일정 검토 — 코드가 문제를 찾고 AI가 판단합니다 */
 function runReview(){
@@ -3568,13 +3608,14 @@ function drawFindings(bubble, list){
 
 function sendAi(text, extra){
   var v = (typeof text==='string' ? text : $('aiIn').value).trim();
-  if(!v && !shotData) return;
-  var img = shotData;
+  if(!v && !shotData.length) return;
+  var imgs = shotData.slice();
   $('aiIn').value='';
 
   var q=document.querySelector('.qchips'); if(q) q.remove();   // 대화가 시작되면 빠른 질문은 치웁니다
-  var me=bub('me', v || '이 사진 봐줘');
-  if(img) me.insertAdjacentHTML('afterbegin','<img class="sent" src="'+img.url+'" alt="보낸 사진">');
+  var me=bub('me', v || (imgs.length>1 ? '이 사진들 봐줘' : '이 사진 봐줘'));
+  if(imgs.length) me.insertAdjacentHTML('afterbegin',
+    imgs.map(function(s){ return '<img class="sent" src="'+s.url+'" alt="보낸 사진">'; }).join(''));
   clearShot();
 
   var wait=bub('ai','');
@@ -3585,7 +3626,8 @@ function sendAi(text, extra){
   if(useLoc && myPos){ ctx.lat=myPos.lat; ctx.lng=myPos.lng; }
   if(extra) for(var ek in extra) ctx[ek]=extra[ek];   // 버튼이 보내는 신호(want 등)
 
-  api('chatAI', v || '이 사진 봐줘', ctx, img ? { mime: img.mime, data: img.data } : null).then(function(r){
+  api('chatAI', v || (imgs.length>1 ? '이 사진들 봐줘' : '이 사진 봐줘'), ctx,
+      imgs.length ? imgs.map(function(s){ return { mime:s.mime, data:s.data }; }) : null).then(function(r){
     wait.remove(); $('aiSend').disabled=false;
     if(!r || !r.ok){ bub('ai',(r&&r.message)||'답변을 가져오지 못했습니다.'); return; }
     var b=bub('ai', r.message);
