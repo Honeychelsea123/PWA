@@ -784,6 +784,7 @@ button.dt__row:active { transform: scale(0.98); }
 .act__amt { font-size: calc(17px * var(--ts)); font-weight: 700; letter-spacing: calc(-0.35px * var(--ts)); }
 .act__tag.t-exp { background: rgba(182,87,36,.14); color: var(--k-food); }
 .act__tag.t-cand { background: rgba(52,120,86,.14); color: var(--k-see); }
+.act__tag.t-book { background: rgba(143,118,214,.16); color: #6B4FC7; }
 /* 후보 카드 — 링크와 같은 이유로 촘촘하게 봅니다.
  * .card는 좁은 화면 미디어쿼리에서 padding이 다시 잡히므로 .card.cnd로 특정도를 올리고,
  * 버튼은 기본 min-height 40px에 카드 높이가 묶이지 않게 낮춥니다. */
@@ -1341,11 +1342,11 @@ function kc(name){ return KC[name] || 'var(--k-etc)'; }
 /* ═══════════ 상태 ═══════════ */
 var S = { trip:{}, plan:[], expense:[], link:[], categories:[], revision:-1 };
 var VIEW='home', fDay='ALL', fCat='ALL', lmap=null, marks=[], route=null, rate=9.0, syncOk=true;
-var APP_VERSION = 'v18 · 시각 묶음·id 보호';
+var APP_VERSION = 'v19 · 예약 메일 읽기';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b62 · 노선 40개';
+var BUILD = 'b63 · 예약 메일 읽기';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -3719,6 +3720,24 @@ function actCard(k, a){
         '<button class="link sm" data-fix="'+k+'">고쳐서 넣기</button>'+
         '<button class="link-quiet" style="margin-left:auto" data-skip="'+k+'">무시</button></div></div>';
   }
+  if(a.type==='booking'){
+    var d1=a.day1?dayDate(a.day1):null, d2=a.day2?dayDate(a.day2):null;
+    var when=[];
+    if(a.day1) when.push('Day '+esc(a.day1)+(d1?' · '+esc(fmtDs(d1)):'')+(a.time1?' '+esc(a.time1):''));
+    if(a.day2) when.push('~ Day '+esc(a.day2)+(d2?' · '+esc(fmtDs(d2)):'')+(a.time2?' '+esc(a.time2):''));
+    return '<div class="act" data-card="'+k+'">'+
+      '<div class="act__hd"><span class="act__tag t-book">예약</span>'+
+        '<span class="act__t">'+esc(a.title)+'</span>'+
+        '<span class="act__m" style="margin-left:auto">'+esc(a.kind||'기타')+'</span></div>'+
+      (a.ref?'<div class="act__m"><span>예약번호 <b>'+esc(a.ref)+'</b></span></div>':
+             '<div class="act__m"><span>예약번호를 못 찾았습니다</span></div>')+
+      (when.length?'<div class="act__m"><span>'+when.join(' ')+'</span></div>':'')+
+      (a.addr?'<div class="act__m"><span>'+esc(a.addr)+'</span></div>':'')+
+      (a.tel?'<div class="act__m"><span>'+esc(a.tel)+'</span></div>':'')+
+      (a.why?'<div class="act__why">'+esc(a.why)+'</div>':'')+
+      '<div class="act__f"><button class="link sm" data-do="'+k+'">예약에 넣기</button>'+
+        '<button class="link-quiet" style="margin-left:auto" data-skip="'+k+'">무시</button></div></div>';
+  }
   if(a.type==='candidate'){
     return '<div class="act" data-card="'+k+'">'+
       '<div class="act__hd"><span class="act__tag t-cand">후보</span>'+
@@ -3820,6 +3839,7 @@ function doAct(k){
 
   // 적용 전 상태를 기록해 둡니다
   var beforePlan=ids(S.plan), beforeExp=ids(S.expense), beforeCand=ids(candList());
+  var beforeBook=ids(S.booking||[]);
   var prev=(a.type==='edit'||a.type==='delete') ? find(S.plan, a.id) : null;
   if(prev) prev=JSON.parse(JSON.stringify(prev));
 
@@ -3830,6 +3850,11 @@ function doAct(k){
   else if(a.type==='candidate'){
     p=api('saveCandidate',{ id:'', title:a.title, cat:a.cat, addr:a.addr||'', memo:a.memo||'',
       lat:a.lat||'', lng:a.lng||'', src:a.src||'AI 추천' });
+  }
+  else if(a.type==='booking'){
+    p=api('saveBooking',{ id:'', kind:a.kind, title:a.title, ref:a.ref||'',
+      day1:a.day1||'', time1:a.time1||'', day2:a.day2||'', time2:a.time2||'',
+      addr:a.addr||'', tel:a.tel||'', memo:a.memo||'' });
   }
   else if(a.type==='delete') p=api('deleteSchedule', a.id);
   else if(a.type==='edit'){
@@ -3852,6 +3877,9 @@ function doAct(k){
     } else if(a.type==='candidate'){
       var nc=newIdIn(beforeCand, candList());
       if(nc) undos[k]={ run:function(){ return api('deleteCandidate', nc); } };
+    } else if(a.type==='booking'){
+      var nb=newIdIn(beforeBook, S.booking||[]);
+      if(nb) undos[k]={ run:function(){ return api('deleteBooking', nb); } };
     } else if(a.type==='add' || !prev){
       var np=newIdIn(beforePlan, S.plan);
       if(np) undos[k]={ run:function(){ return api('deleteSchedule', np); } };
@@ -3866,7 +3894,8 @@ function doAct(k){
       card.insertAdjacentHTML('beforeend','<div class="act__done">' +
         (a.type==='delete'?'삭제했습니다':a.type==='edit'?'수정했습니다':
          a.type==='expense'?'지출에 넣었습니다':
-         a.type==='candidate'?"후보 여행지에 담았습니다":'일정에 넣었습니다') + '</div>');
+         a.type==='candidate'?"후보 여행지에 담았습니다":
+         a.type==='booking'?'예약에 넣었습니다':'일정에 넣었습니다') + '</div>');
       if(undos[k]) card.insertAdjacentHTML('beforeend',
         '<button class="link sm" data-undo="'+k+'" style="margin-top:6px">되돌리기</button>');
     }
