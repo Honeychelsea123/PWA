@@ -26,8 +26,10 @@
    반경과 깊이만 리퀴드 글래스로 교체
    ═══════════════════════════════════════════════════ */
 :root {
-  --primary:        #0066cc;
-  --primary-focus:  #0071e3;
+  /* 에어비앤비 Rausch. 여행 앱에 iOS 기본 파랑보다 이 색이 어울립니다.
+     강조색은 하나만 쓰는 구조라 여기만 바꾸면 버튼·링크·지도 핀이 함께 따라옵니다. */
+  --primary:        #ff385c;
+  --primary-focus:  #e00b41;
   --ink:            #1d1d1f;
   --body-muted:     #cccccc;
   --ink-80:         #333333;
@@ -54,7 +56,10 @@
   --glass-deep: rgba(255, 255, 255, 0.78);
   --glass-edge: rgba(255, 255, 255, 0.72);
   --glass-blur: saturate(185%) blur(24px);
-  --lift-1: 0 1px 1px rgba(20, 25, 45, .04), 0 6px 18px rgba(20, 25, 45, .06);
+  /* 에어비앤비는 그림자 정의가 하나뿐입니다. 카드는 그 한 단계만 씁니다.
+     시트(--lift-2)는 스크림 위에 뜨는 것이라 분리가 필요해 더 깊게 남겨둡니다 —
+     여기까지 평평하게 하면 시트가 배경에 묻힙니다. */
+  --lift-1: rgba(0,0,0,.02) 0 0 0 1px, rgba(0,0,0,.04) 0 2px 6px, rgba(0,0,0,.10) 0 4px 8px;
   --lift-2: 0 1px 2px rgba(20, 25, 45, .05), 0 14px 38px rgba(20, 25, 45, .10);
   --spec:   inset 0 1px 0 rgba(255, 255, 255, .85);
 
@@ -203,7 +208,7 @@ svg { display: block; flex: none; }
   background: var(--primary); color: var(--on-dark);
   font-size: calc(17px * var(--ts)); font-weight: 400; letter-spacing: calc(-0.374px * var(--ts));
   border-radius: var(--r-pill); padding: 11px 22px; min-height: 44px;
-  box-shadow: 0 2px 10px rgba(0, 102, 204, .28);
+  box-shadow: 0 2px 10px rgba(255, 56, 92, .28);
 }
 .btn-primary.sm { padding: 8px 17px; min-height: 38px; font-size: calc(15px * var(--ts)); letter-spacing: calc(-0.3px * var(--ts)); }
 .link { color: var(--primary); font-size: calc(17px * var(--ts)); font-weight: 400; letter-spacing: calc(-0.374px * var(--ts)); }
@@ -279,7 +284,7 @@ svg { display: block; flex: none; }
 .dayhd__d { font-size: calc(14px * var(--ts)); letter-spacing: calc(-0.224px * var(--ts)); color: var(--ink-48); }
 .dayhd__now {
   margin-left: auto; font-size: calc(12px * var(--ts)); font-weight: 600; letter-spacing: calc(-0.12px * var(--ts));
-  color: var(--primary); background: rgba(0,102,204,.10);
+  color: var(--primary); background: rgba(255,56,92,.10);
   padding: 3px 10px; border-radius: var(--r-pill);
 }
 .dline {
@@ -557,7 +562,7 @@ svg { display: block; flex: none; }
 .bub { max-width: 86%; min-width: 0; overflow-wrap: anywhere; word-break: break-word;
   padding: var(--s-sm) 16px; font-size: calc(17px * var(--ts)); line-height: 1.47; letter-spacing: calc(-0.374px * var(--ts)); border-radius: var(--r-lg); }
 .bub.ai { background: rgba(255,255,255,.72); border: 0.5px solid rgba(255,255,255,.8); align-self: flex-start; border-bottom-left-radius: var(--r-sm); }
-.bub.me { background: var(--primary); color: var(--on-dark); align-self: flex-end; border-bottom-right-radius: var(--r-sm); box-shadow: 0 2px 10px rgba(0,102,204,.26); }
+.bub.me { background: var(--primary); color: var(--on-dark); align-self: flex-end; border-bottom-right-radius: var(--r-sm); box-shadow: 0 2px 10px rgba(255,56,92,.26); }
 .sug { background: rgba(255,255,255,.72); border: 0.5px solid rgba(255,255,255,.8); border-radius: var(--r-md); padding: var(--s-md); margin-top: var(--s-sm); }
 .sug__m { font-size: calc(14px * var(--ts)); letter-spacing: calc(-0.224px * var(--ts)); color: var(--ink-48); margin-bottom: var(--s-sm); line-height: 1.43; }
 .sug__m b { font-size: calc(17px * var(--ts)); font-weight: 600; letter-spacing: calc(-0.374px * var(--ts)); color: var(--ink); }
@@ -679,7 +684,7 @@ body.kb .chat { min-height: 80px; }
   font-size: calc(11px * var(--ts)); font-weight: 600; letter-spacing: calc(-0.1px * var(--ts));
   padding: 3px 9px; border-radius: var(--r-pill); flex: none;
 }
-.act__tag.t-add { background: rgba(0,102,204,.12);  color: var(--primary); }
+.act__tag.t-add { background: rgba(255,56,92,.12);  color: var(--primary); }
 .act__tag.t-edit{ background: rgba(134,100,64,.16); color: var(--k-cafe); }
 .act__tag.t-del { background: rgba(176,74,124,.14); color: var(--k-shop); }
 .act__t { font-size: calc(16px * var(--ts)); font-weight: 600; letter-spacing: calc(-0.35px * var(--ts)); min-width: 0; }
@@ -715,7 +720,7 @@ body.locked { position: fixed; width: 100%; overflow: hidden; }
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .src::before { content: ""; width: 5px; height: 5px; border-radius: var(--r-pill); background: var(--primary); flex: none; }
-#aiLoc.is-on { color: var(--primary); background: rgba(0,102,204,.10); }
+#aiLoc.is-on { color: var(--primary); background: rgba(255,56,92,.10); }
 .typing { display: inline-flex; gap: 4px; align-items: center; }
 .typing i { width: 6px; height: 6px; border-radius: var(--r-pill); background: var(--ink-48); animation: blink 1.1s infinite; }
 .typing i:nth-child(2){ animation-delay:.18s } .typing i:nth-child(3){ animation-delay:.36s }
@@ -733,7 +738,7 @@ body.locked { position: fixed; width: 100%; overflow: hidden; }
 .bkcard__i {
   width: 36px; height: 36px; border-radius: var(--r-pill);
   display: grid; place-items: center; flex: none;
-  color: var(--primary); background: rgba(0,102,204,.12);
+  color: var(--primary); background: rgba(255,56,92,.12);
   border: 1.5px solid var(--canvas);
 }
 .bkcard__i.stay { color: var(--k-stay); background: rgba(113,84,160,.14); }
@@ -797,7 +802,7 @@ button.dt__row:active { transform: scale(0.98); }
 /* 빈 시간 제안 */
 .fitbox { margin-bottom: var(--s-md); }
 .fit__h { font-size: calc(13px * var(--ts)); font-weight: 600; color: var(--ink-48); margin-bottom: var(--s-xs); }
-.fit { background: rgba(0,102,204,.06); border-radius: 16px; padding: 10px var(--s-md); margin-bottom: var(--s-xs); }
+.fit { background: rgba(255,56,92,.06); border-radius: 16px; padding: 10px var(--s-md); margin-bottom: var(--s-xs); }
 .fit__t { font-size: calc(15px * var(--ts)); font-weight: 600; letter-spacing: calc(-0.3px * var(--ts)); }
 .fit__s { font-size: calc(12px * var(--ts)); color: var(--ink-48); margin-top: 1px; }
 .fit .link.sm { min-height: 28px; padding: 4px 0; margin: 4px 0 0; font-size: calc(14px * var(--ts)); }
@@ -816,7 +821,7 @@ button.dt__row:active { transform: scale(0.98); }
   flex: none; width: 46px; height: 46px; border-radius: var(--r-pill);
   background: var(--primary); color: var(--on-dark);
   display: grid; place-items: center;
-  box-shadow: 0 2px 10px rgba(0,102,204,.28);
+  box-shadow: 0 2px 10px rgba(255,56,92,.28);
 }
 .chat__f .send:disabled { opacity: .4; box-shadow: none; }
 .chat__f .send svg { margin-left: -1px; }
@@ -1346,7 +1351,7 @@ var APP_VERSION = 'v19 · 예약 메일 읽기';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b63 · 예약 메일 읽기';
+var BUILD = 'b64 · Rausch 1단계';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -3106,7 +3111,7 @@ function updatePins(){
   // 하루 동선을 선으로 잇습니다. 되돌아가는 구간이 눈으로 보입니다.
   if(bounds.length>1 && bounds.length<=12 && L.polyline){
     route=L.polyline(bounds, {
-      color: getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#0066cc',
+      color: getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#ff385c',
       weight:2.5, opacity:.65,
       dashArray:'7 6', lineCap:'round', lineJoin:'round'
     }).addTo(lmap);
