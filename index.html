@@ -342,6 +342,12 @@ svg { display: block; flex: none; }
 /* 하루 요약 — 날짜 옆에 붙습니다. 이동이 많은 날은 '빡셈'이 뜹니다. */
 .daystat { font-weight: 400; font-size: calc(12px * var(--ts)); margin-left: 6px; }
 .daystat b { color: var(--k-food); font-weight: 600; }
+/* 노선 딱지 — 도쿄 역 안내판과 같은 색입니다 */
+.ln {
+  display: inline-block; margin-left: 5px; padding: 1px 7px; border-radius: var(--r-pill);
+  background: #888; color: #fff; font-size: calc(11px * var(--ts)); font-weight: 600;
+  letter-spacing: 0; vertical-align: middle; white-space: nowrap;
+}
 .tlcard { border-radius: var(--r-lg); overflow: hidden; }
 .ev { border-top: 0.5px solid rgba(0,0,0,.07); }
 .ev:first-child { border-top: none; }
@@ -1339,7 +1345,7 @@ var APP_VERSION = 'v18 · 시각 묶음·id 보호';
 /* 배포 확인용 표식. 설정 화면의 "화면" 줄에 같이 표시됩니다.
    새 파일이 폰까지 도달했는지 눈으로 바로 확인할 수 있습니다.
    (APP_VERSION은 서버 버전과 비교하는 값이라 건드리지 않습니다) */
-var BUILD = 'b60 · 순서 바꾸기·하루 요약';
+var BUILD = 'b61 · 노선색';
 var $ = function(id){ return document.getElementById(id); };
 
 /* Apps Script JSON API 배포 URL. 데이터는 계속 구글 시트를 씁니다. */
@@ -2331,10 +2337,45 @@ function movePlan(id, dir){
     });
 }
 
+/* ── 지하철 노선색 ──
+ * 도쿄는 역 안내판이 노선색으로 되어 있습니다. 앱에서도 같은 색을 쓰면
+ * 메모를 읽지 않아도 "아, 주황색 긴자선" 하고 눈으로 찾게 됩니다.
+ * 색은 각 사업자의 공식 노선색입니다. 밝은 색(은색·금색·노랑)은 글자를 검게 둡니다.
+ * 이름은 메모에 적힌 한국어 표기를 그대로 찾습니다 — '도쿄메트로 긴자선'도 '긴자선'으로 잡힙니다. */
+var LINES = [
+  // 도쿄메트로
+  ['긴자선','#FF9500'], ['마루노우치선','#F62E36'], ['히비야선','#B5B5AC',1],
+  ['도자이선','#009BBF'], ['치요다선','#00BB85'], ['유라쿠초선','#C1A470',1],
+  ['한조몬선','#8F76D6'], ['난보쿠선','#00AC9B'], ['후쿠토신선','#9C5E31'],
+  // 도에이
+  ['아사쿠사선','#E85298'], ['미타선','#0079C2'], ['신주쿠선','#6CBB5A'], ['오에도선','#B6007A'],
+  // JR
+  ['야마노테선','#9ACD32',1], ['주오선','#F15A22'], ['소부선','#FFD400',1],
+  ['케이힌토호쿠선','#00B2E5'], ['사이쿄선','#00AC9B'],
+  // 그 밖
+  ['게이큐','#DA0442'], ['츠쿠바 익스프레스','#000098'],
+  ['유리카모메','#0080C6'], ['모노레일','#0072BC']
+];
+function linesIn(text){
+  var t = String(text||''), out = [];
+  LINES.forEach(function(L){
+    if(t.indexOf(L[0]) !== -1 && out.length < 3) out.push(L);   // 한 줄에 세 개면 충분합니다
+  });
+  return out;
+}
+function lineChips(text){
+  return linesIn(text).map(function(L){
+    return '<span class="ln" style="background:'+L[1]+(L[2]?';color:#1c1c1e':'')+'">'+esc(L[0])+'</span>';
+  }).join('');
+}
+
 function evHtml(p,isNow){
   var mm=parseMemo(p.memo), q=encodeURIComponent(p.title||'');
   var sub=[]; if(p.cat) sub.push(esc(p.cat));
   if(mm.cost) sub.push(esc(mm.cost.split(/[·,]/)[0].trim()));
+
+  // 노선은 이동방법 메모에 적혀 있습니다. 제목에도 있을 수 있어 같이 봅니다.
+  var chips = lineChips((mm.move||'') + ' ' + (p.title||''));
 
   var det='';
   if(mm.move) det+='<div class="drow"><b>이동</b> '+esc(nice(mm.move))+'</div>';
@@ -2351,9 +2392,9 @@ function evHtml(p,isNow){
   return '<article class="ev'+(isNow?' is-now':'')+'" data-ev="'+esc(p.id)+'">'+
     '<div class="ev__row"><span class="ev__t">'+esc(p.time||'–')+'</span>'+
       '<div class="ev__b"><div class="ev__ttl">'+esc(nice(p.title))+'</div>'+
-      (sub.length
+      (sub.length || chips
         ? '<div class="ev__sub">' + (p.cat ? '<i class="cdot" style="background:'+kc(p.cat)+'"></i>' : '') +
-          '<span>'+sub.join(' · ')+'</span></div>'
+          '<span>'+sub.join(' · ')+'</span>' + chips + '</div>'
         : '')+'</div>'+
       '<span class="ev__chev">'+ico('chev',16)+'</span></div>'+
     '<div class="detail">'+det+'</div></article>';
